@@ -1,0 +1,44 @@
+// ===== Firestore セキュリティルール =====
+// Firebaseコンソール → Firestore Database → ルール に貼り付けて「公開」を押してください。
+// これを設定しないと、ランキングやサクセス記録の保存が permission-denied で失敗します。
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- プレイヤーのプロフィール ----
+    // 誰でも読める(フレンド検索・ランキングで使う)。書けるのは本人だけ。
+    match /players/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // ---- サクセスの完走記録 ----
+    // 誰でも読める(ランキング・所属バンド一覧)。作成・更新は本人の記録のみ。
+    match /completedRuns/{runId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if request.auth != null
+                    && resource.data.uid == request.auth.uid;
+    }
+
+    // ---- フレンド申請 ----
+    match /friendRequests/{reqId} {
+      allow read: if request.auth != null
+                  && (resource.data.fromUid == request.auth.uid
+                      || resource.data.toUid == request.auth.uid);
+      allow create: if request.auth != null
+                    && request.resource.data.fromUid == request.auth.uid;
+      allow update, delete: if request.auth != null
+                    && (resource.data.fromUid == request.auth.uid
+                        || resource.data.toUid == request.auth.uid);
+    }
+
+    // ---- フレンド一覧(各ユーザーのサブコレクション) ----
+    match /friends/{uid}/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}
