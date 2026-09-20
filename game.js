@@ -72,6 +72,9 @@ const state = {
   afterpartyState: null,
   justLiveDayArrived: null,
   liveDayAnnounced: false,
+  scheduledGuest: null,      // 次の定期ライブに出てもらうフレンド
+  justLiveCancelled: null,   // 熱で中止になった時の通知
+  justGuestReply: null,      // 対バンに誘った返事
   nextLiveTurn: 6,          // 次回定期ライブのターン(6週ごと)
   lastLiveTurn: null,       // 直近でライブを打ったターン(客足の回復に使う)
   bestAudience: 0,          // 1回のライブで集めた最高動員(メジャーの条件に使う)
@@ -381,8 +384,11 @@ function stageNerveMult(venue) {
   return 1 - penalty;
 }
 
-let LIVE_EXP_BASE = 4;
-let LIVE_EXP_RANGE = 10;
+// ライブで得られる経験点は会場の規模で決まる。
+// 小規模なら4カテゴリすべてに10ずつ、中規模なら20ずつ…と上がっていく。
+const LIVE_EXP_BY_VENUE = {
+  small: 10, mid: 20, zepp: 30, hall: 40, budokan: 50,
+};
 
 // 経験点の内訳を「筋力経験点を10得た」のように1行ずつにする
 function expSegments(applied) {
@@ -635,6 +641,77 @@ function checkTakumaMeeting() {
   state.justTakumaEvent = 'TKM1';
 }
 
+// ===== 定期ライブへの対バン誘い =====
+// 親密度50以上のフレンドを、次の定期ライブに誘える。週は消費しない。
+// 親密度が高いほど受けてもらいやすい。
+const GUEST_INVITE_MIN_INTIMACY = 50;
+
+function canInviteGuest(friendId) {
+  if (state.scheduledGuest) return false;                 // 1回のライブにつき1組
+  if (state.condition === 'fever') return false;
+  const f = state.friends.find(x => x.id === friendId);
+  if (!f || !f.isNpc) return false;
+  if ((f.intimacy || 0) < GUEST_INVITE_MIN_INTIMACY) return false;
+  return true;
+}
+
+// 受けてもらえる確率。親密度50でおよそ5割、100で9割。
+function guestAcceptChance(intimacy) {
+  const v = Math.max(0, Math.min(100, intimacy || 0));
+  return Math.max(0, Math.min(0.9, 0.5 + (v - GUEST_INVITE_MIN_INTIMACY) * 0.008));
+}
+
+// 誘いの返事を出す。週は進めない。
+function inviteGuestToLive(friendId) {
+  if (!canInviteGuest(friendId)) return null;
+  const f = state.friends.find(x => x.id === friendId);
+  const npc = NPC_MEMBERS[f.memberKey || f.id] || {};
+  const accepted = Math.random() < guestAcceptChance(f.intimacy);
+  const liveTurn = state.nextLiveTurn;
+  if (accepted) {
+    state.scheduledGuest = {
+      id: f.id, memberKey: f.memberKey || f.id,
+      name: f.name, bandName: f.bandName || npc.bandName || '',
+      fame: npc.fame || f.fame || 0, followers: npc.followers || f.followers || 0,
+      turn: liveTurn,
+    };
+    addIntimacy(f, 3);
+    addLog(`${turnToDateLabel(liveTurn)}のライブに${f.name}が出演してくれることになった！`, 'plus');
+  } else {
+    addLog(`${f.name}は${turnToDateLabel(liveTurn)}の予定が合わなかった…`, 'neutral');
+  }
+  state.justGuestReply = {
+    friendId: f.id, memberKey: f.memberKey || f.id, name: f.name,
+    bandName: f.bandName || npc.bandName || '',
+    accepted, dateLabel: turnToDateLabel(liveTurn),
+  };
+  render();
+  return state.justGuestReply;
+}
+
+// 熱で定期ライブに出られない時の中止処理。
+// キャンセル料を払い、次回の定期ライブを組み直す。
+function cancelScheduledLive() {
+  const venue = pickVenueForPlayer();
+  const fee = Math.max(LIVE_CANCEL_FEE_MIN, Math.round(venue.cost * LIVE_CANCEL_FEE_RATE));
+  const paid = Math.min(state.money, fee);
+  state.money -= paid;
+  state.liveDayAnnounced = false;
+  state.justLiveDayArrived = null;
+  state.nextLiveTurn = state.turn + LIVE_INTERVAL_TURNS;
+  // 予約していた対バン相手も一緒に流れる
+  const guest = state.scheduledGuest;
+  state.scheduledGuest = null;
+  state.justLiveCancelled = {
+    venueName: venue.name, fee: paid,
+    shortOfMoney: paid < fee,
+    guestName: guest ? guest.name : null,
+    nextLabel: turnToDateLabel(state.turn + LIVE_INTERVAL_TURNS),
+  };
+  addLog(`熱のため${venue.name}での定期ライブを中止した(キャンセル料-${yen(paid)})`, 'minus');
+  render();
+}
+
 // 約束の期限が切れていないか、毎週みる
 function checkLabelRequest() {
   if (!state.labelRequest) return;
@@ -673,10 +750,10 @@ const EVENT_POOL = [
     fire: () => { state.justKeibaEvent = { raceName: KEIBA_RACE_NAMES[Math.floor(Math.random() * KEIBA_RACE_NAMES.length)] }; } },
 
   // --- 物語のイベント(前提を満たしている間だけ候補に入る) ---
-  { key: 'ryoheiRP3', weight: 5,
+  { key: 'ryoheiRP3', weight: 9,
     cond: () => state.ryoheiEvents.rp4Done && !state.ryoheiEvents.rp3Done,
     fire: () => { state.ryoheiEvents.rp3Done = true; state.justRyoheiEvent = { key: 'RP3' }; } },
-  { key: 'takuma', weight: 5,
+  { key: 'takuma', weight: 9,
     cond: () => !state.takumaEvents.tkm1Done || !state.takumaEvents.tkm2Done || !state.takumaEvents.collabPending,
     fire: () => {
       const ev = state.takumaEvents;
@@ -1074,10 +1151,14 @@ const START_MONTH = 8; // 8月開始
 // サクセスの長さ。2年半 = 30ヶ月 × 4週 = 120ターン。
 const SUCCESS_MONTHS = 30;
 const TOTAL_TURNS = SUCCESS_MONTHS * WEEKS_PER_MONTH; // 120ターン=2年半
-const LIVE_INTERVAL_TURNS = 6; // 6週に1回定期ライブ(接続は次フェーズ)
+const LIVE_INTERVAL_TURNS = 8; // 2ヶ月(8週)に1回、定期ライブがある
 // たくまとの出会い(TKM1)は必ずサクセス序盤に起きる。
 // 通常のイベント抽選でこの週までに出会えていなければ、強制的に発生させる。
 const TAKUMA_MEETING_DEADLINE = 12; // 3ヶ月(12週)
+// 熱を出したまま定期ライブの日を迎えたら、出られないので中止する。
+// 会場のキャンセル料を払い、次の定期ライブまで待つことになる。
+const LIVE_CANCEL_FEE_RATE = 0.3;   // 会場費の3割
+const LIVE_CANCEL_FEE_MIN = 5000;
 
 // turn(1始まり) → { year, month, weekOfMonth }
 function turnToDate(turn) {
@@ -1352,8 +1433,13 @@ function advanceWeek(opts) {
 
   // 定期ライブの日が来たら、主人公の吹き出しで知らせる(1サイクルにつき1回)
   if (state.turn >= state.nextLiveTurn && !state.liveDayAnnounced) {
-    state.liveDayAnnounced = true;
-    state.justLiveDayArrived = { venueName: pickVenueForPlayer().name };
+    // 熱で寝込んでいる時は出演できないので、ライブ自体を中止する
+    if (state.condition === 'fever') {
+      cancelScheduledLive();
+    } else {
+      state.liveDayAnnounced = true;
+      state.justLiveDayArrived = { venueName: pickVenueForPlayer().name };
+    }
   }
 
   // りょーぺとの対バンの日が来たら知らせる
@@ -1463,9 +1549,9 @@ let INDIE_OVERALL_REQUIRED = 50;   // Dランク相当
 // 条件を満たしても、すぐ声がかかるわけではない。満たしている間だけ毎回抽選する。
 // 1年半で約20%、2年で約40%が到達するように、実際に2年ぶんを回して決めた数値。
 let MAJOR_AUDIENCE_REQUIRED = 700;      // 1本のライブで呼べた最高動員
-let MAJOR_FAME_REQUIRED = 32000;
-let MAJOR_FOLLOWERS_REQUIRED = 25600;
-let MAJOR_OVERALL_REQUIRED = 70;        // Bランク相当
+let MAJOR_FAME_REQUIRED = 36000;
+let MAJOR_FOLLOWERS_REQUIRED = 28800;
+let MAJOR_OVERALL_REQUIRED = 80;        // Aランク相当(ライブで経験点が入るぶん基準を上げた)
 let MAJOR_OFFER_CHANCE = 0.40;        // 条件を満たせば数週以内に必ず声がかかる(=抽選ではなく条件で決まる)
 
 // メジャーの給料。知名度・フォロワー・ライブの動員から20万〜50万の間で決まる。
@@ -1870,7 +1956,10 @@ function doLive(memberKeys, opts) {
 
   // 集客: 自分の集客力(=呼べる人数)に、出来・サポート・宣伝を乗せる。
   // 会場のキャパは「上限」であって、キャパが大きいから客が増えるわけではない。
-  const draw = calcDrawPower() * memberBonus * (0.75 + performanceFinal / 250);
+  // 対バンのゲストが出てくれる回は、相手の客も来るぶん集客が伸びる
+  const guest = (!isExtra && state.scheduledGuest && state.scheduledGuest.turn <= state.turn) ? state.scheduledGuest : null;
+  const guestBonus = guest ? (1 + Math.min(0.45, (guest.fame || 0) / 3000 * 0.15)) : 1;
+  const draw = calcDrawPower() * memberBonus * guestBonus * (0.75 + performanceFinal / 250);
   const promoAudience = state.liveExtraAudience || 0;
   const audience = Math.max(0, Math.min(venue.capacity, Math.round((draw + promoAudience) * liveAudienceMult())));
   const fill = venue.capacity > 0 ? audience / venue.capacity : 0;
@@ -1903,19 +1992,23 @@ function doLive(memberKeys, opts) {
   state.liveExtraAudience = 0;   // 宣伝の効果はこのライブで使い切る
 
   // 経験点(全カテゴリ、来場数・出来で変動)
-  const scoreFactor = fill * 0.5 + (performanceFinal / 100) * 0.5;
-  const expBase = Math.round(LIVE_EXP_BASE + scoreFactor * LIVE_EXP_RANGE);
-  const expSpread = Math.max(1, Math.round(expBase * 0.3));
-  const expRange = { str: [expBase - expSpread, expBase + expSpread], ski: [expBase - expSpread, expBase + expSpread],
-    int: [expBase - expSpread, expBase + expSpread], men: [expBase - expSpread, expBase + expSpread] };
-  grantExp(rollExpFromRanges(expRange));
+  // 経験点は会場の規模ぶんを4カテゴリすべてに配る(小規模10 / 中規模20 / Zepp30 …)
+  const expPerCategory = LIVE_EXP_BY_VENUE[venue.key] || 10;
+  const liveExp = grantExp({ str: expPerCategory, ski: expPerCategory, int: expPerCategory, men: expPerCategory });
 
   const memberNote = memberKeys.length ? ` / サポート${memberKeys.length}名雇用` : '';
   const fillNote = `(${Math.round(fill * 100)}%)`;
   addLog(`${venue.name}で${isExtra ? '追加' : '定期'}ライブ！動員${audience}人${fillNote} 出来${performanceFinal} 利益${yen(profit)} 知名度${fameGain >= 0 ? '+' : ''}${fameGain}${memberNote}`,
     flopped ? 'minus' : (profit >= 0 ? 'plus' : 'minus'));
   state.justPlayedLive = { venueKey: venue.key, venueName: venue.name, audience, revenue, profit, fameGain, performanceFinal,
-    capacity: venue.capacity, fill, flopped, isExtra, venueCost };
+    capacity: venue.capacity, fill, flopped, isExtra, venueCost, appliedExp: liveExp,
+    guestName: guest ? guest.name : null, guestBand: guest ? guest.bandName : null };
+  if (guest) {
+    const gf = state.friends.find(x => x.id === guest.id);
+    if (gf) addIntimacy(gf, 5);
+    addLog(`${guest.name}(${guest.bandName})が対バンしてくれた！`, 'plus');
+    state.scheduledGuest = null;
+  }
   let rp1JustTriggered = false;
   if (!state.ryoheiEvents.rp1Done) {
     state.ryoheiEvents.rp1Done = true;
@@ -2220,6 +2313,9 @@ function resetGameState() {
   state.afterpartyState = null;
   state.justLiveDayArrived = null;
   state.liveDayAnnounced = false;
+  state.scheduledGuest = null;
+  state.justLiveCancelled = null;
+  state.justGuestReply = null;
   state.justDrNasakenaiEvent = false;
   state.drNasakenaiEventDone = false;
   state.maxHealthMult = 100;
@@ -2353,6 +2449,8 @@ window.GameActions = {
   resolveParentCall, resolveCdOnAir, resolveLabelRequest,
   spendExtraWeek,
   doPromotion, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
+  GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
+  GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
   resolveRyoheiRP3, scheduleRyoheiCollab, finalizeRecordingDay, resolveDrNasakenaiChoice, fleeAfterparty,
   resolveTakumaTkm1, resolveTakumaTkm2, acceptTakumaCollab, declineTakumaCollab,
   startNewGameWithNames, claimAllowanceMail,

@@ -1636,6 +1636,21 @@
   .friend-card-fill { display: block; height: 100%; border-radius: 2px; }
   .friend-card-figures { font-size: 10px; color: rgba(255,255,255,0.4); }
   .friend-card-arrow { color: rgba(255,255,255,0.28); font-size: 20px; flex: none; }
+  .friend-card-wrap { margin-bottom: 8px; }
+  .friend-card-wrap .friend-card { margin-bottom: 0; border-radius: 12px 12px 0 0; border-bottom: none; }
+  .friend-invite-row {
+    display: flex; align-items: center; justify-content: flex-end;
+    padding: 6px 10px; border-radius: 0 0 12px 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.09); border-top: none;
+  }
+  .friend-invite-btn {
+    border: none; border-radius: 999px; cursor: pointer;
+    font-size: 11px; font-weight: 800; padding: 5px 14px;
+    background: linear-gradient(180deg, #E8C468, #C9A44E); color: #241B06;
+  }
+  .friend-invite-btn:active { transform: scale(0.96); }
+  .friend-invite-note { font-size: 10px; color: rgba(255,255,255,0.35); }
   .friend-unmet {
     display: flex; align-items: center; gap: 8px; margin-top: 10px;
     padding: 9px 11px; border-radius: 10px;
@@ -3018,20 +3033,20 @@
       measurementId: "G-3FCH2Y6VSE",
     };
   </script>
-  <script>window.APP_VERSION = "100";</script>
-  <script src="firebase-service.js?v=100"></script>
-  <script src="icons.js?v=100"></script>
-  <script src="stats-engine.js?v=100"></script>
+  <script>window.APP_VERSION = "101";</script>
+  <script src="firebase-service.js?v=101"></script>
+  <script src="icons.js?v=101"></script>
+  <script src="stats-engine.js?v=101"></script>
   <!-- 効果音(WebAudioで合成。音声ファイルは持たない) -->
-  <script src="sfx.js?v=100"></script>
-  <script src="game.js?v=100"></script>
-  <script src="ui.js?v=100"></script>
+  <script src="sfx.js?v=101"></script>
+  <script src="game.js?v=101"></script>
+  <script src="ui.js?v=101"></script>
   <!-- エンディングだけを確認するためのプレビュー(index.html?ending=1)。
        パラメータが無ければ何もしない。不要になればこの1行とending-preview.jsを消すだけでよい。 -->
-  <script src="keiba.js?v=100"></script>
-  <script src="ending-preview.js?v=100"></script>
+  <script src="keiba.js?v=101"></script>
+  <script src="ending-preview.js?v=101"></script>
   <!-- 選択肢のあるイベントだけを確認するためのプレビュー(index.html?event=1)。
        パラメータが無ければ何もしない。不要になればこの1行とevent-preview.jsを消すだけでよい。 -->
-  <script src="event-preview.js?v=100"></script>
+  <script src="event-preview.js?v=101"></script>
 </body>
 </html>

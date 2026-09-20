@@ -476,6 +476,21 @@ function showStartingAbilityPopup(born) {
 }
 
 // 競馬などで悪いクセがついた時のお知らせ
+// 熱で定期ライブが中止になった時のお知らせ
+function showLiveCancelledPopup(info) {
+  playSfx('fail', { minGap: 0 });
+  showModal(`
+    <div class="modal-card">
+      <p class="modal-title">ライブを中止した</p>
+      <p class="modal-sub">熱が下がらず、${info.venueName}での定期ライブに出られなかった。</p>
+      <p class="modal-sub" style="color:#E06A6A;">キャンセル料 ${yen(info.fee)}${info.shortOfMoney ? '(払えるぶんだけ支払った)' : ''}</p>
+      ${info.guestName ? `<p class="modal-sub">${info.guestName}との対バンも流れてしまった…</p>` : ''}
+      <p class="modal-sub">次の定期ライブは ${info.nextLabel}</p>
+      <button class="modal-primary-btn" onclick="closeModal();">…</button>
+    </div>
+  `);
+}
+
 function showNegativeAbilityPopup(got) {
   playSfx('fail', { minGap: 0 });
   showModal(`
@@ -2605,6 +2620,86 @@ async function declineOnlineFriendRequest(requestId) {
   await refreshFirebaseInbox();
 }
 
+// ===== 定期ライブへの対バン誘い =====
+// キャラごとに返事のセリフが違う。週は消費しないので、その場で結果まで見せる。
+const GUEST_REPLIES = {
+  takuma: {
+    ok: d => `${d}？空いてるから大丈夫やと思う！よろしく！`,
+    ng: () => 'その日仕事入ってんねん〜',
+  },
+  ryohei: {
+    ok: () => 'えぇぇ、うえぇぇぇぇ、、本当に俺たちでいいの？ありがとう！よろしく',
+    ng: () => 'どうしよっかな〜、、一応空いてるけど、、その日ライブ見に行きたいんよなあ、、せっかくやけどやめとくわぁ、、',
+  },
+  kisara: {
+    ok: d => `${d}ね、大丈夫。任せて`,
+    ng: () => 'ごめん、その日はちょっと予定があって…',
+  },
+  itsuki: {
+    ok: d => `${d}か。……いいよ`,
+    ng: () => '……その日は無理',
+  },
+};
+
+function guestReplyLine(memberKey, accepted, dateLabel) {
+  const set = GUEST_REPLIES[memberKey] || GUEST_REPLIES.kisara;
+  return accepted ? set.ok(dateLabel) : set.ng(dateLabel);
+}
+
+// フレンド画面の「誘う」。ライブハウス外で、主人公と相手が並ぶ。
+function inviteGuestScene(friendId) {
+  const s = window.GameState;
+  const f = s.friends.find(x => x.id === friendId);
+  if (!f) return;
+  const memberKey = f.memberKey || f.id;
+  const charImg = (window.MEMBER_CHARS && window.MEMBER_CHARS[memberKey])
+    ? window.MEMBER_CHARS[memberKey].convo : idlePortrait();
+  const dateLabel = window.GameData.turnToDateLabel(s.nextLiveTurn);
+  const portraits = [
+    { src: idlePortrait(), name: s.playerName || 'タケル', active: true },
+    { src: charImg, name: f.name, active: false },
+  ];
+  setEventBgm(true);
+  showDialogueScene(portraits, s.playerName || 'タケル',
+    `${dateLabel}のライブに出てほしいんやけど、予定とかどう？`,
+    dialogueChoices([
+      { label: '誘う', action: `confirmInviteGuest('${friendId}')` },
+      { label: 'やっぱりやめる', action: 'closeInviteScene()', cancel: true },
+    ]),
+    window.VENUE_OUTSIDE_BG);
+}
+
+function closeInviteScene() {
+  dialogueState = null;
+  setEventBgm(false);
+  render();
+}
+
+function confirmInviteGuest(friendId) {
+  const s = window.GameState;
+  const reply = GameActions.inviteGuestToLive(friendId);
+  if (!reply) { closeInviteScene(); return; }
+  const memberKey = reply.memberKey;
+  const charImg = (window.MEMBER_CHARS && window.MEMBER_CHARS[memberKey])
+    ? window.MEMBER_CHARS[memberKey].convo : idlePortrait();
+  const portraits = [
+    { src: idlePortrait(), name: s.playerName || 'タケル', active: false },
+    { src: charImg, name: reply.name, active: true },
+  ];
+  const segments = [{ text: guestReplyLine(memberKey, reply.accepted, reply.dateLabel), type: 'neutral' }];
+  if (reply.accepted) {
+    segments.push({
+      text: `${reply.dateLabel}のライブに${reply.bandName ? reply.bandName + 'の' : ''}${reply.name}が出演してくれるようになった`,
+      type: 'plus',
+    });
+  }
+  showResultDialogue(portraits, reply.name, segments, null, window.VENUE_OUTSIDE_BG, null, () => {
+    setEventBgm(false);
+    setTab('friend');
+    render();
+  });
+}
+
 function screenFriend() {
   if (hostOfferState.friendId) {
     return screenHostOffer();
@@ -2640,21 +2735,32 @@ function screenFriend() {
       ? window.MEMBER_CHARS[f.memberKey].idle : null;
     const iv = f.intimacy || 0;
     const tier = intimacyTier(iv);
+    const canInvite = GameActions.canInviteGuest(f.id);
+    const inviteReason = s.scheduledGuest
+      ? `${s.scheduledGuest.name}が出演予定`
+      : (iv < GameActions.GUEST_INVITE_MIN_INTIMACY ? `親密度${GameActions.GUEST_INVITE_MIN_INTIMACY}で誘える` : '');
     return `
-      <button class="friend-card" onclick="friendDetailId='${f.id}';render();">
-        ${img ? `<img src="${img}" class="friend-card-face" loading="lazy" decoding="async" />`
-              : '<span class="friend-card-face friend-card-noface">👤</span>'}
-        <span class="friend-card-body">
-          <span class="friend-card-top">
-            <span class="friend-card-name">${f.name}</span>
-            <span class="friend-card-tier" style="color:${tier.color};">${tier.label}</span>
+      <div class="friend-card-wrap">
+        <button class="friend-card" onclick="friendDetailId='${f.id}';render();">
+          ${img ? `<img src="${img}" class="friend-card-face" loading="lazy" decoding="async" />`
+                : '<span class="friend-card-face friend-card-noface">👤</span>'}
+          <span class="friend-card-body">
+            <span class="friend-card-top">
+              <span class="friend-card-name">${f.name}</span>
+              <span class="friend-card-tier" style="color:${tier.color};">${tier.label}</span>
+            </span>
+            <span class="friend-card-sub">${f.bandName || f.part || ''}</span>
+            <span class="friend-card-bar"><span class="friend-card-fill" style="width:${Math.min(100, iv)}%;background:${tier.color};"></span></span>
+            <span class="friend-card-figures">親密度 ${iv} ・ 知名度 ${(f.fame || 0).toLocaleString()}</span>
           </span>
-          <span class="friend-card-sub">${f.bandName || f.part || ''}</span>
-          <span class="friend-card-bar"><span class="friend-card-fill" style="width:${Math.min(100, iv)}%;background:${tier.color};"></span></span>
-          <span class="friend-card-figures">親密度 ${iv} ・ 知名度 ${(f.fame || 0).toLocaleString()}</span>
-        </span>
-        <span class="friend-card-arrow">›</span>
-      </button>`;
+          <span class="friend-card-arrow">›</span>
+        </button>
+        <div class="friend-invite-row">
+          ${canInvite
+            ? `<button class="friend-invite-btn" onclick="inviteGuestScene('${f.id}')">対バンに誘う</button>`
+            : `<span class="friend-invite-note">${inviteReason}</span>`}
+        </div>
+      </div>`;
   }).join('');
 
   const unmetHtml = unmetCount > 0
@@ -2704,6 +2810,11 @@ function screenFriend() {
       </div>
     </div>
     ${inboxHtml}
+    <div class="craft-block">
+      <p class="craft-block-label">次の定期ライブ
+        <span class="craft-block-hint">${window.GameData.turnToDateLabel(s.nextLiveTurn)}${
+          s.scheduledGuest ? ` / ${s.scheduledGuest.name}が出演` : ' / 対バン相手なし'}</span></p>
+    </div>
     <div class="craft-block">
       <p class="craft-block-label">バンド仲間 <span class="craft-block-hint">${npcFriends.length}人</span></p>
       <div class="friend-list">${npcCards}</div>
@@ -4977,10 +5088,17 @@ function showRecordingPopup(info) {
 }
 
 function showLiveFinishedDialogue(info) {
+  const expLines = info.appliedExp
+    ? StatsEngine.EXP_CATEGORIES
+        .filter(c => (info.appliedExp[c] || 0) > 0)
+        .map(c => ({ text: `${StatsEngine.EXP_CATEGORY_NAMES[c]}経験点を${info.appliedExp[c]}得た`, type: 'plus' }))
+    : [];
   const resultSegments = [
     { text: `${info.venueName}でのライブが終わった！`, type: 'neutral' },
+    ...(info.guestName ? [{ text: `${info.guestBand ? info.guestBand + 'の' : ''}${info.guestName}が対バンしてくれた！`, type: 'plus' }] : []),
     { text: `動員${info.audience.toLocaleString()}人 / 出来${info.performanceFinal}`, type: 'neutral' },
     { text: `知名度が${info.fameGain}増えた`, type: 'plus' },
+    ...expLines,
     info.profit >= 0
       ? { text: `利益が${yen(info.profit)}増えた`, type: 'plus' }
       : { text: `${yen(Math.abs(info.profit))}の赤字になった`, type: 'minus' },
@@ -5448,6 +5566,11 @@ function render() {
   }
 
   const s = window.GameState;
+  if (s.justLiveCancelled) {
+    const info = s.justLiveCancelled;
+    s.justLiveCancelled = null;
+    queuePopup(() => showLiveCancelledPopup(info));
+  }
   if (s.justNegativeAbility) {
     const got = s.justNegativeAbility;
     s.justNegativeAbility = null;
