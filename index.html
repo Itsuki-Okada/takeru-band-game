@@ -2136,7 +2136,7 @@
     display:flex; align-items:flex-start; justify-content:space-between; gap:10px;
     padding:8px 10px; background: linear-gradient(180deg, rgba(10,10,14,0.82), rgba(10,10,14,0));
   }
-  .home-hud-left { display:flex; flex-direction:column; gap:5px; }
+  .home-hud-left { display:flex; flex-direction:column; gap:5px; min-width:0; }
   .home-hud-date { display:flex; flex-direction:column; line-height:1.25; }
   .home-hud-date .main { font-size:14px; font-weight:800; color:#F2E7C9; text-shadow:0 1px 3px rgba(0,0,0,0.6); }
   .home-hud-date .sub { font-size:10px; color:#E8C468; font-weight:700; }
@@ -2153,11 +2153,15 @@
   .home-hud-stats-compact .hud-stat-row { padding:2px 7px; gap:4px; }
   .home-hud-stats-compact .hud-stat-label { font-size:11px; }
   .home-hud-stats-compact .hud-stat-value { font-size:11.5px; }
-  .home-hud-health { display:flex; align-items:center; gap:6px; min-width:120px; }
-  .home-hud-health .hud-health-label { font-size:10px; color:#F2E7C9; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,0.6); }
+  .home-hud-health { display:flex; align-items:center; gap:6px; min-width:120px; flex:none; }
+  .home-hud-health .hud-health-label {
+    font-size:10px; color:#F2E7C9; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,0.6);
+    white-space:nowrap; flex:none;
+  }
   .hud-health-bar { width:80px; height:9px; border-radius:999px; background:rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.25); overflow:hidden; }
   .hud-health-fill { height:100%; border-radius:999px; transition: width 0.7s cubic-bezier(0.22,0.61,0.36,1), background 0.5s ease; }
-  .hud-health-pct { font-size:10.5px; font-weight:800; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.6); min-width:28px; }
+  .hud-health-pct { font-size:10.5px; font-weight:800; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,0.6); min-width:28px; white-space:nowrap; }
+  .hud-health-bar { flex:none; }
 
   /* ===== MENUピル(ホーム画面右上) ===== */
   .menu-pill {
@@ -3076,20 +3080,20 @@
       measurementId: "G-3FCH2Y6VSE",
     };
   </script>
-  <script>window.APP_VERSION = "107";</script>
-  <script src="firebase-service.js?v=107"></script>
-  <script src="icons.js?v=107"></script>
-  <script src="stats-engine.js?v=107"></script>
+  <script>window.APP_VERSION = "108";</script>
+  <script src="firebase-service.js?v=108"></script>
+  <script src="icons.js?v=108"></script>
+  <script src="stats-engine.js?v=108"></script>
   <!-- 効果音(WebAudioで合成。音声ファイルは持たない) -->
-  <script src="sfx.js?v=107"></script>
-  <script src="game.js?v=107"></script>
-  <script src="ui.js?v=107"></script>
+  <script src="sfx.js?v=108"></script>
+  <script src="game.js?v=108"></script>
+  <script src="ui.js?v=108"></script>
   <!-- エンディングだけを確認するためのプレビュー(index.html?ending=1)。
        パラメータが無ければ何もしない。不要になればこの1行とending-preview.jsを消すだけでよい。 -->
-  <script src="keiba.js?v=107"></script>
-  <script src="ending-preview.js?v=107"></script>
+  <script src="keiba.js?v=108"></script>
+  <script src="ending-preview.js?v=108"></script>
   <!-- 選択肢のあるイベントだけを確認するためのプレビュー(index.html?event=1)。
        パラメータが無ければ何もしない。不要になればこの1行とevent-preview.jsを消すだけでよい。 -->
-  <script src="event-preview.js?v=107"></script>
+  <script src="event-preview.js?v=108"></script>
 </body>
 </html>

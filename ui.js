@@ -3350,6 +3350,10 @@ function closeDialogue() {
   const ds = dialogueState;
   dialogueState = null;
   render();
+  // イベントの吹き出しを閉じた時点で、同じ日に出すべき知らせが残っていれば続けて出す
+  // (ライブ当日の知らせがイベントに押し出されて翌週にずれるのを防ぐ)
+  const s = window.GameState;
+  const pendingLiveDay = !!s.justLiveDayArrived;
   // 通常モーダル(showModal系)と同じキューを共有しているため、こちらでも次を進める
   modalQueue.shift();
   if (modalQueue.length > 0) {
@@ -3357,6 +3361,9 @@ function closeDialogue() {
   }
   if (ds && ds.onClose) ds.onClose();
   endEventBgmIfIdle();
+  if (pendingLiveDay && !dialogueState && modalQueue.length === 0) {
+    showStartOfDayPopupsIfAny();
+  }
 }
 
 // 吹き出しのボタンから別タブへ移動する場合に使う。先に画面遷移を確定させてから
@@ -4772,9 +4779,13 @@ function showStartOfDayPopupsIfAny() {
   }
   if (s.justLiveDayArrived) {
     const info = s.justLiveDayArrived;
+    // 実際にまだライブ当日である時だけ出す。
+    // 何かの都合で持ち越されていた場合に、翌週になってから出てしまうのを防ぐ。
     s.justLiveDayArrived = null;
-    showLiveDayPopup(info);
-    return;
+    if (s.liveDayAnnounced && s.turn >= s.nextLiveTurn) {
+      showLiveDayPopup(info);
+      return;
+    }
   }
   if (s.justTakumaCollabDay) {
     s.justTakumaCollabDay = false;
