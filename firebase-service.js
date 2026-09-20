@@ -75,7 +75,7 @@
   }
 
   // 自分のプレイヤー情報をFirestoreに公開プロフィールとして保存(検索・ランキング対象になる)
-  async function upsertPlayerProfile({ playerId, playerName, bandName, fame, followers, level, skills, releases, money }) {
+  async function upsertPlayerProfile({ playerId, playerName, bandName, iconUrl, fame, followers, level, skills, releases, money }) {
     if (!ready) return false;
     try {
       const releasedOnly = (releases || []).filter(r => r.released !== false);
@@ -84,6 +84,7 @@
         playerId,
         playerName,
         bandName,
+        iconUrl: iconUrl || '',
         fame: fame || 0,
         followers: followers || 0,
         level: level || 1,
@@ -112,6 +113,7 @@
         playerId: record.playerId || '',
         playerName: record.playerName || 'タケル',
         bandName: record.bandName || '',
+        iconUrl: record.iconUrl || '',
         overallRank: record.overallRank || 'G',
         overallScore: Math.round(record.overallScore || 0),
         agencyStatus: record.agencyStatus || 'unsigned',  // 'major' | 'indie' | 'unsigned'

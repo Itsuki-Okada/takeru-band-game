@@ -23,7 +23,44 @@ let bgmMuted = false;
 // ===== 音量バランス =====
 // 効果音がBGMに埋もれず、かといってBGMが消えないところを狙った値。
 // BGM_VOLUME を下げるほど効果音が前に出る(効果音側は sfx.js の master)。
-const BGM_VOLUME = 0.38;
+const BGM_VOLUME = 0.38;   // 基準値。ここにユーザー設定の倍率を掛ける
+
+// ===== 音量設定(0〜100で保存。BGMと効果音を別々に持つ) =====
+const VOLUME_KEY = 'takeru_volumes';
+let volumeSettings = { bgm: 70, sfx: 80 };
+
+function loadVolumeSettings() {
+  try {
+    const v = JSON.parse(localStorage.getItem(VOLUME_KEY) || 'null');
+    if (v && typeof v.bgm === 'number' && typeof v.sfx === 'number') volumeSettings = v;
+  } catch (e) { /* 既定値のまま */ }
+  applyVolumeSettings();
+}
+
+function applyVolumeSettings() {
+  const audioEl = document.getElementById('bgmPlayer');
+  if (audioEl) audioEl.volume = currentBgmVolume();
+  if (window.Sfx) window.Sfx.setVolume(SFX_BASE_VOLUME * (volumeSettings.sfx / 100));
+}
+
+// 今のBGM音量(曲ごとの補正 × 基準値 × ユーザー設定)
+function currentBgmVolume() {
+  const gain = BGM_GAIN[currentBgmKey] || 1;
+  return Math.min(1, BGM_VOLUME * gain * (volumeSettings.bgm / 100));
+}
+
+const SFX_BASE_VOLUME = 0.60;   // sfx.js のマスターと同じ基準値
+
+function setVolume(kind, value) {
+  const v = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  volumeSettings[kind] = v;
+  try { localStorage.setItem(VOLUME_KEY, JSON.stringify(volumeSettings)); } catch (e) { /* ignore */ }
+  applyVolumeSettings();
+  // 効果音は動かしたその場で聴けたほうが分かりやすい
+  if (kind === 'sfx' && v > 0) playSfx('tap', { minGap: 0 });
+  const label = document.getElementById('vol-' + kind + '-value');
+  if (label) label.textContent = v + '%';
+}
 
 // 曲ごとの録音レベルの差を揃える補正。
 // 各mp3の実測RMSを -17dB 前後に合わせてあり、曲が変わっても音量が飛ばない。
@@ -136,7 +173,7 @@ function updateBGM(tab) {
     audioEl.src = window.BGM[key];
     audioEl.loop = true;
   }
-  audioEl.volume = Math.min(1, BGM_VOLUME * (BGM_GAIN[key] || 1));
+  audioEl.volume = Math.min(1, BGM_VOLUME * (BGM_GAIN[key] || 1) * (volumeSettings.bgm / 100));
   audioEl.muted = bgmMuted || !audioUnlocked;
   if (audioEl.paused) {
     audioEl.play().catch(() => {}); // 自動再生制限時はミュート状態で待機し、初回操作で解除される
@@ -353,6 +390,25 @@ function confirmAccountName() {
 }
 
 let accountNameEditing = false;
+// タイトルのネームプレートから開く、名前とアイコンの設定
+function showPlayerSettings() {
+  showModal(`
+    <div class="modal-card">
+      <p class="modal-title">プレイヤー設定</p>
+      <div class="player-setting-row">
+        <img src="${currentIconUrl()}" class="player-setting-icon" />
+        <div class="player-setting-text">
+          <p class="player-setting-name">${getAccountName() || '未設定'}</p>
+          <p class="player-setting-sub">アイコンと名前はランキングにも出ます</p>
+        </div>
+      </div>
+      <button class="modal-primary-btn" onclick="closeModal();showIconPicker();">アイコンを変える</button>
+      <button class="modal-primary-btn" onclick="closeModal();openAccountNameEdit();">名前を変える</button>
+      <button class="modal-close-btn" onclick="closeModal()">閉じる</button>
+    </div>
+  `);
+}
+
 function openAccountNameEdit() {
   accountNameEditing = true;
   appPhase = 'accountname';
@@ -438,6 +494,7 @@ function syncFirebaseProfile() {
     const s = window.GameState;
     window.FirebaseSvc.upsertPlayerProfile({
       playerId: s.playerId, playerName: s.playerName, bandName: s.bandName,
+      iconUrl: currentIconUrl(),
       fame: Math.round(s.fame), followers: Math.round(s.followers),
       money: Math.round(s.money), skills: s.skills,
       releases: (s.releases || []).map(r => ({ title: r.title, totalSold: r.totalSold, released: r.released })),
@@ -680,8 +737,8 @@ function screenTitleFull() {
   const accountName = getAccountName() || '未設定';
   return `
     <div class="title-screen">
-      <button class="title-player-plate" onclick="openAccountNameEdit()">
-        <img src="${idlePortrait()}" class="title-player-face" />
+      <button class="title-player-plate" onclick="showPlayerSettings()">
+        <img src="${currentIconUrl()}" class="title-player-face" />
         <span class="title-player-text">
           <span class="title-player-label">PLAYER</span>
           <span class="title-player-name">${accountName}</span>
@@ -910,6 +967,7 @@ function screenRankingTitleFull() {
     return `
     <div class="rank-row">
       <div class="rank-no ${i < 3 ? 'rank-no-top' : ''}">${medal}</div>
+      <img src="${r.iconUrl || defaultIconUrl()}" class="rank-face" loading="lazy" decoding="async" />
       <div class="rank-body">
         <p class="rank-band">${r.bandName || '???'}
           ${r.isMajor ? '<span class="rank-major">MAJOR</span>' : ''}</p>
@@ -1368,11 +1426,22 @@ function screenSong() {
   if (s.songInProgress) {
     const p = s.songInProgress;
     const pct = Math.round((1 - p.weeksLeft / p.totalWeeks) * 100);
-    return sectionTitle('曲を作る') + `
-      <div class="progress-card">
-        <p class="progress-title">制作中: 「${p.title}」(${p.genre})</p>
-        <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-        <p class="progress-sub">残り${p.weeksLeft}週で完成 — 何か行動すると週が進みます</p>
+    return `
+      <div class="craft-hero" style="background-image:url('${window.HOME_BG}')">
+        <div class="craft-hero-shade"></div>
+        <img src="${window.RECORDING_CHARS.guitar_idle}" class="craft-hero-char" />
+        <div class="craft-hero-text">
+          <p class="craft-hero-label">制作中</p>
+          <p class="craft-hero-title">「${p.title}」</p>
+          <p class="craft-hero-sub">${p.genre}</p>
+        </div>
+      </div>
+      <div class="craft-progress">
+        <div class="craft-progress-head">
+          <span>完成まで</span><b>あと${p.weeksLeft}週</b>
+        </div>
+        <div class="craft-bar"><div class="craft-bar-fill" style="width:${pct}%"></div></div>
+        <p class="craft-progress-note">何か行動すると週が進みます</p>
       </div>
     ` + songLifecycleList() + logBox();
   }
@@ -1384,23 +1453,46 @@ function screenSong() {
     const tier = window.GameData.genreMasteryTier(mastery);
     const selectedStyle = songFlowState.genre === g ? `box-shadow:0 0 0 2px ${tier.color} inset;` : '';
     return `
-    <button class="genre-btn ${songFlowState.genre === g ? 'genre-btn-selected' : ''}" style="border-color:${tier.color};${selectedStyle}" onclick="songFlowState.genre='${g}';render();">${g}<br><span style="font-size:9px;color:${tier.color};">${tier.label}${mastery >= 100 ? '(MAX)' : ''}</span></button>
+    <button class="genre-card ${songFlowState.genre === g ? 'genre-card-on' : ''}" style="--gTier:${tier.color};"
+      onclick="songFlowState.genre='${g}';render();">
+      <span class="genre-card-name">${g}</span>
+      <span class="genre-card-bar"><span class="genre-card-fill" style="width:${Math.min(100, mastery)}%;"></span></span>
+      <span class="genre-card-tier">${tier.label}${mastery >= 100 ? ' MAX' : ''}</span>
+    </button>
   `;
   }).join('');
-  return sectionTitle(`曲を作る(¥2,000 / 体力-${window.GameData.SONG_HEALTH_COST}% / 制作に2週)`) +
-    feverBanner() +
-    `<div style="padding:0 14px;">
-      <p class="section-label" style="padding:0 0 4px;">曲名(空欄でランダム生成)</p>
-      <div style="display:flex;gap:6px;">
-        <input id="songTitleField" type="text" placeholder="曲名を入力" class="text-input" style="flex:1;" />
-        <button class="row-btn" onclick="document.getElementById('songTitleField').value=GameData.randomSongTitle()">🎲 ランダム</button>
+  return `
+    <div class="craft-hero" style="background-image:url('${window.HOME_BG}')">
+      <div class="craft-hero-shade"></div>
+      <img src="${window.RECORDING_CHARS.guitar_idle}" class="craft-hero-char" />
+      <div class="craft-hero-text">
+        <p class="craft-hero-label">SONG WRITING</p>
+        <p class="craft-hero-title">曲を作る</p>
+        <p class="craft-hero-sub">¥2,000 / 体力-${window.GameData.SONG_HEALTH_COST}% / 2週かかる</p>
+        <span class="craft-hero-badge">
+          <span class="craft-badge-label">予想完成度</span>
+          <span class="craft-badge-value">${predicted}</span>
+        </span>
       </div>
-    </div>` +
-    `<p class="section-label">予想完成度の目安: ${predicted}前後(±ランダム補正あり)</p>` +
-    `<p class="section-label">ジャンルを選ぶ</p>` +
-    `<div class="grid3" style="padding:0 14px;">${genreButtons}</div>` +
-    `<div style="padding:12px 14px 0;"><button class="rest-btn" ${songFlowState.genre ? '' : 'disabled'} onclick="confirmStartSong()">作曲する</button></div>` +
-    songLifecycleList() + logBox();
+    </div>
+    ${feverBanner()}
+    <div class="craft-block">
+      <p class="craft-block-label">曲名</p>
+      <div class="craft-title-row">
+        <input id="songTitleField" type="text" placeholder="空欄ならおまかせ" class="text-input craft-title-input" />
+        <button class="craft-dice" onclick="document.getElementById('songTitleField').value=GameData.randomSongTitle()">🎲</button>
+      </div>
+    </div>
+    <div class="craft-block">
+      <p class="craft-block-label">ジャンル <span class="craft-block-hint">作るほど熟練度が上がり、完成度が伸びます</span></p>
+      <div class="genre-grid">${genreButtons}</div>
+    </div>
+    <div style="padding:4px 14px 0;">
+      <button class="rest-btn" ${songFlowState.genre ? '' : 'disabled'} onclick="confirmStartSong()">
+        ${songFlowState.genre ? `${songFlowState.genre}で作曲する` : 'ジャンルを選んでください'}
+      </button>
+    </div>
+  ` + songLifecycleList() + logBox();
 }
 
 function confirmStartSong() {
@@ -1529,15 +1621,34 @@ function screenRecording() {
     if (unused.length === 0) {
       return sectionTitle('CD種別を選ぶ') + `<p class="empty">未使用の曲がありません。先に曲制作をしてください。</p>`;
     }
+    const enough = t => unused.length >= t.minSongs;
     const typeCards = window.GameData.CD_TYPES.map(t => `
-      <div class="row" onclick="recordingState={type:'${t.key}',selectedSongs:[],price:${t.priceMin},members:[],studio:'a',producer:false};render();">
-        <div class="thumb">💿</div>
-        <div class="row-text">
-          <p class="row-title">${t.name}</p>
-          <p class="row-sub">${t.minSongs}〜${t.maxSongs}曲 / 売値¥${t.priceMin.toLocaleString()}〜¥${t.priceMax.toLocaleString()}</p>
+      <button class="cd-type-card ${enough(t) ? '' : 'cd-type-locked'}" ${enough(t) ? '' : 'disabled'}
+        onclick="recordingState={type:'${t.key}',selectedSongs:[],price:${t.priceMin},members:[],studio:'a',producer:false};render();">
+        <span class="cd-type-disc"><span class="cd-type-hole"></span></span>
+        <span class="cd-type-text">
+          <span class="cd-type-name">${t.name}</span>
+          <span class="cd-type-sub">${t.minSongs}〜${t.maxSongs}曲 / 売値 ¥${t.priceMin.toLocaleString()}〜¥${t.priceMax.toLocaleString()}</span>
+          ${enough(t) ? '' : `<span class="cd-type-need">あと${t.minSongs - unused.length}曲必要</span>`}
+        </span>
+        <span class="cd-type-arrow">›</span>
+      </button>`).join('');
+    return `
+      <div class="craft-hero" style="background-image:url('${window.STUDIO_BG.a}')">
+        <div class="craft-hero-shade"></div>
+        <img src="${window.RECORDING_CHARS.vocal1}" class="craft-hero-char" />
+        <div class="craft-hero-text">
+          <p class="craft-hero-label">RECORDING</p>
+          <p class="craft-hero-title">CDを作る</p>
+          <p class="craft-hero-sub">手持ちの曲 ${unused.length}曲</p>
         </div>
-      </div>`).join('');
-    return sectionTitle('CD種別を選ぶ') + feverBanner() + `<div class="list">${typeCards}</div>` + logBox();
+      </div>
+      ${feverBanner()}
+      <div class="craft-block">
+        <p class="craft-block-label">どの規模で出す？</p>
+        <div class="cd-type-list">${typeCards}</div>
+      </div>
+    ` + logBox();
   }
 
   const type = window.GameData.CD_TYPES.find(t => t.key === recordingState.type);
@@ -1846,7 +1957,7 @@ function screenLive() {
       ${sectionTitle('自分でライブを打つ')}
       <p class="section-label">会場を押さえれば定期ライブ以外の週でもライブができます。会場費は前払い。埋まれば知名度が大きく伸び、ガラガラだと赤字のうえ評判も落ちます。</p>
       ${fatigueNote()}
-      <div class="job-grid">${extraVenueCards()}</div>
+      <div class="venue-list">${extraVenueCards()}</div>
       ${logBox()}
     `;
   }
@@ -1874,27 +1985,49 @@ function screenLive() {
 
 // 追加ライブで押さえられる会場の一覧。
 // 見込み動員と充足率をそのまま出して、「攻めるか守るか」を数字で判断できるようにする。
+// 追加ライブの会場一覧。
+// 「どれくらい埋まるか」が一目で分かることを優先し、横並びではなく1行ずつのカードにする。
 function extraVenueCards() {
   const s = window.GameState;
   const G = window.GameData;
   return G.VENUES.map(v => {
     const locked = s.fame < v.minFame;
-    const est = locked ? null : G.estimateLive(v.key);
-    const poor = est && est.fill < 0.2;
     const canPay = s.money >= v.cost;
-    const note = locked
-      ? `知名度${v.minFame.toLocaleString()}以上で解放`
-      : `見込み動員 ${est.audience.toLocaleString()}人 / 定員${v.capacity.toLocaleString()}人(${Math.round(est.fill * 100)}%)`;
-    const warn = locked ? '' : (poor
-      ? '<p class="row-sub" style="color:#E06A6A;">客席が埋まらず、評判を落とす見込み</p>'
-      : (est.fill >= 0.9 ? '<p class="row-sub" style="color:#E8C46A;">満員近い！知名度が大きく伸びる</p>' : ''));
+    if (locked) {
+      return `
+        <div class="venue-card venue-card-locked">
+          <div class="venue-card-head">
+            <span class="venue-card-name">${v.name}</span>
+            <span class="venue-card-cap">定員${v.capacity.toLocaleString()}人</span>
+          </div>
+          <p class="venue-card-lock">🔒 知名度 ${v.minFame.toLocaleString()} 以上で解放</p>
+        </div>`;
+    }
+    const est = G.estimateLive(v.key);
+    const pct = Math.round(est.fill * 100);
+    // 充足率で色を変える: 8割以上=金 / 2割未満=赤 / それ以外=白
+    const tone = est.fill >= 0.8 ? 'good' : (est.fill < 0.2 ? 'bad' : 'mid');
+    const note = est.fill >= 0.9
+      ? '満員に近い。知名度が大きく伸びる'
+      : (est.fill < 0.2 ? '客席が埋まらず、評判を落とす見込み' : '');
     return `
-      <button class="job-card" ${locked || !canPay ? 'disabled' : ''}
+      <button class="venue-card venue-${tone}" ${canPay ? '' : 'disabled'}
         onclick="chooseExtraVenue('${v.key}')">
-        <p class="job-card-name">${v.name}</p>
-        <p class="job-card-detail">${note}</p>
-        <p class="job-card-wage">会場費 ${yen(v.cost)}${canPay ? '' : '(資金不足)'} / 体力-${v.healthCost}%</p>
-        ${warn}
+        <div class="venue-card-head">
+          <span class="venue-card-name">${v.name}</span>
+          <span class="venue-card-cap">定員${v.capacity.toLocaleString()}人</span>
+        </div>
+        <div class="venue-card-bar"><div class="venue-card-fill" style="width:${Math.min(100, pct)}%;"></div></div>
+        <div class="venue-card-figures">
+          <span class="venue-card-aud">見込み動員 <b>${est.audience.toLocaleString()}</b>人</span>
+          <span class="venue-card-pct">${pct}%</span>
+        </div>
+        <div class="venue-card-costs">
+          <span>会場費 <b>${yen(v.cost)}</b></span>
+          <span>体力 <b>-${v.healthCost}%</b></span>
+        </div>
+        ${note ? `<p class="venue-card-note">${note}</p>` : ''}
+        ${canPay ? '' : '<p class="venue-card-note venue-card-short">所持金が足りません</p>'}
       </button>`;
   }).join('');
 }
@@ -3232,7 +3365,7 @@ function homeMenuPopoverHtml() {
         <button class="menu-panel-close" onclick="homeMenuOpen=false;render();">✕</button>
       </div>
       <div class="menu-panel-player">
-        <img src="${idlePortrait()}" class="menu-panel-face" />
+        <img src="${currentIconUrl()}" class="menu-panel-face" />
         <div class="menu-panel-info">
           <p class="menu-panel-name">${s.playerName || 'タケル'}</p>
           <p class="menu-panel-band">${s.bandName || ''}</p>
@@ -3275,6 +3408,41 @@ function screenSettings() {
           <p class="row-sub">BGM・効果音をまとめて消す</p>
         </div>
         <span class="row-value ${bgmMuted ? '' : 'gold'}">${bgmMuted ? 'ON' : 'OFF'}</span>
+      </div>
+      <div class="row volume-row">
+        <div class="thumb">🎵</div>
+        <div class="row-text">
+          <p class="row-title">BGMの音量 <span class="volume-value" id="vol-bgm-value">${volumeSettings.bgm}%</span></p>
+          <input type="range" class="volume-slider" min="0" max="100" step="5"
+                 value="${volumeSettings.bgm}" oninput="setVolume('bgm', this.value)" />
+        </div>
+      </div>
+      <div class="row volume-row">
+        <div class="thumb">🔊</div>
+        <div class="row-text">
+          <p class="row-title">効果音の音量 <span class="volume-value" id="vol-sfx-value">${volumeSettings.sfx}%</span></p>
+          <input type="range" class="volume-slider" min="0" max="100" step="5"
+                 value="${volumeSettings.sfx}" oninput="setVolume('sfx', this.value)" />
+        </div>
+      </div>
+    </div>
+    <p class="settings-group-label">👤 プレイヤー</p>
+    <div class="list">
+      <div class="row" onclick="showIconPicker()">
+        <img src="${currentIconUrl()}" class="thumb" style="object-fit:cover;object-position:top center;" />
+        <div class="row-text">
+          <p class="row-title">アイコン</p>
+          <p class="row-sub">ランキングや事務所に表示されます</p>
+        </div>
+        <span class="row-value gold">変更</span>
+      </div>
+      <div class="row" onclick="openAccountNameEdit()">
+        <div class="thumb">✎</div>
+        <div class="row-text">
+          <p class="row-title">アカウント名</p>
+          <p class="row-sub">${getAccountName() || '未設定'}</p>
+        </div>
+        <span class="row-value gold">変更</span>
       </div>
     </div>
     <p class="settings-group-label">🎮 ゲーム</p>
@@ -3569,7 +3737,7 @@ function screenStatus() {
     <div class="exp-pool-chip"><span>${StatsEngine.EXP_CATEGORY_NAMES[c]}</span><span>${s.expPool[c] || 0}</span></div>
   `).join('');
   return `
-    <img class="hero-box" src="${profileIconUrl || window.RECORDING_CHARS.guitar_idle}" style="object-fit:${profileIconUrl ? 'cover' : 'contain'};background:${profileIconUrl ? 'transparent' : '#0D0D12'};" />
+    <img class="hero-box" src="${currentIconUrl()}" onclick="showIconPicker()" style="cursor:pointer;" />
     <p class="hero-name">${s.playerName || 'タケル'}</p>
     <p class="hero-caption">${s.bandName || 'タケルバンド'} — ${turnToDateLabel(s.turn)} / ${s.agencyStatus === 'major' ? 'メジャー' : (s.agencyStatus === 'indie' ? ((window.GameData.indieLabelDef(s.indieLabel) || {}).name || 'インディーズ所属') : '無所属')}</p>
     <div class="overall-rank-card">
@@ -3600,18 +3768,7 @@ function screenStatus() {
       <div class="list" style="padding:0 14px;">${abilityRows(s)}</div>
     `}
     <div style="padding:0 14px;">
-      <div class="row" style="cursor:default;">
-        <div class="thumb">🆔</div>
-        <div class="row-text">
-          <p class="row-title">プレイヤーID</p>
-          <p class="row-sub">${s.playerId || '---'}</p>
-        </div>
-        <button class="row-btn" id="copyIdBtn" onclick="copyPlayerId()">${playerIdCopied ? '✅ コピー済み' : '📋 コピー'}</button>
-      </div>
-    </div>
-    <div style="padding:0 14px;">
-      <input type="file" id="profileUploadInput" accept="image/*" style="display:none;" onchange="handleProfileUpload(event)" />
-      <button class="genre-btn" style="width:100%;" onclick="document.getElementById('profileUploadInput').click()">アイコン画像を変更</button>
+      <button class="genre-btn" style="width:100%;" onclick="showIconPicker()">アイコンを変更</button>
     </div>
     <div class="statgrid">
       <div class="statcard"><p class="statcard-label">所持金</p><p class="statcard-value" style="${s.money < 0 ? 'color:#E06A6A;' : ''}">${s.money < 0 ? '-' : ''}${yen(Math.abs(s.money))}</p></div>
@@ -3658,8 +3815,73 @@ function statChip(label, numericValue, displayValue, cls, key, subLabel) {
   return `<div class="stat-chip ${cls}${flash}"><span class="chip-label">${label}</span>${subHtml}<span class="chip-value">${displayValue}</span></div>`;
 }
 
-let profileIconUrl = null;
-let playerIdCopied = false;
+// ===== プレイヤーアイコン =====
+// 端末にひとつ保存し、ステータス画面・HUD・タイトル・ランキングで共通して使う。
+// 既定はタケルの待機絵。プリセットから選ぶか、手持ちの画像をアップロードできる。
+const PROFILE_ICON_KEY = 'takeru_profile_icon';
+let profileIconUrl = null;   // 起動時に読み込む(下のloadProfileIconで設定)
+
+function iconPresets() {
+  const M = window.MEMBER_CHARS || {};
+  const H = window.HOME_CHAR_STATES || {};
+  return [
+    { key: 'takeru',        label: 'タケル',     url: H.normal },
+    { key: 'takeru_happy',  label: 'タケル(笑)', url: window.TAKERU_HAPPY_IMG },
+    { key: 'takeru_cold',   label: 'タケル(不調)', url: H.cold },
+    { key: 'guitar',        label: 'ギター',     url: (window.RECORDING_CHARS || {}).guitar_idle },
+    { key: 'vocal',         label: 'ボーカル',   url: (window.RECORDING_CHARS || {}).vocal1 },
+    { key: 'kisara',        label: 'きさら',     url: M.kisara && M.kisara.idle },
+    { key: 'itsuki',        label: 'いつき',     url: M.itsuki && M.itsuki.idle },
+    { key: 'ryohei',        label: 'りょーぺ',   url: M.ryohei && M.ryohei.idle },
+    { key: 'takuma',        label: 'たくま',     url: M.takuma && M.takuma.idle },
+  ].filter(p => !!p.url);
+}
+
+// 既定アイコン(タケル待機)
+function defaultIconUrl() {
+  return (window.HOME_CHAR_STATES && window.HOME_CHAR_STATES.normal) || '';
+}
+
+// 今使っているアイコン。未設定なら既定を返すので、呼び出し側でフォールバックは不要。
+function currentIconUrl() {
+  return profileIconUrl || defaultIconUrl();
+}
+
+function loadProfileIcon() {
+  try {
+    const v = localStorage.getItem(PROFILE_ICON_KEY);
+    profileIconUrl = v && v.trim() ? v : null;
+  } catch (e) { profileIconUrl = null; }
+}
+
+function setProfileIcon(url) {
+  profileIconUrl = url || null;
+  try {
+    if (url) localStorage.setItem(PROFILE_ICON_KEY, url);
+    else localStorage.removeItem(PROFILE_ICON_KEY);
+  } catch (e) { /* 保存できない環境は今回のプレイ中だけ有効 */ }
+  syncFirebaseProfile();   // ランキングに出るアイコンも更新する
+  render();
+}
+
+// アイコン選択ダイアログ
+function showIconPicker() {
+  const cur = currentIconUrl();
+  const tiles = iconPresets().map(p => `
+    <button class="icon-pick ${p.url === cur ? 'icon-pick-on' : ''}" onclick="setProfileIcon('${p.url}');closeModal();">
+      <img src="${p.url}" loading="lazy" decoding="async" />
+      <span>${p.label}</span>
+    </button>`).join('');
+  showModal(`
+    <div class="modal-card modal-card-scroll">
+      <p class="modal-title">アイコンを選ぶ</p>
+      <div class="icon-pick-grid">${tiles}</div>
+      <input type="file" id="profileUploadInput" accept="image/*" style="display:none;" onchange="handleProfileUpload(event)" />
+      <button class="modal-primary-btn" onclick="document.getElementById('profileUploadInput').click()">画像から選ぶ</button>
+      <button class="modal-close-btn" onclick="closeModal()">閉じる</button>
+    </div>
+  `);
+}
 
 function copyPlayerId() {
   const id = (window.GameState && window.GameState.playerId) || '';
@@ -3690,13 +3912,31 @@ function copyPlayerIdFallback(text, onDone) {
   onDone();
 }
 
+// アップロードされた画像は、保存できるよう小さく作り直してから取っておく。
+// 元のサイズのまま持つと数MBになり、localStorageに入りきらないため。
 function handleProfileUpload(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function(e) {
-    profileIconUrl = e.target.result;
-    render();
+  reader.onload = function (e) {
+    const img = new Image();
+    img.onload = function () {
+      const size = 160;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      // 中央を正方形に切り出す
+      const side = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+      try {
+        setProfileIcon(canvas.toDataURL('image/jpeg', 0.82));
+      } catch (err) {
+        setProfileIcon(e.target.result);
+      }
+      closeModal();
+    };
+    img.onerror = function () { setProfileIcon(e.target.result); closeModal(); };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -3708,9 +3948,7 @@ function statusBar() {
   const fame = Math.round(s.fame);
   const health = Math.round(s.health);
 
-  const iconHtml = profileIconUrl
-    ? `<img src="${profileIconUrl}" class="profile-icon" loading="lazy" decoding="async" />`
-    : `<div class="profile-icon profile-icon-placeholder">🎤</div>`;
+  const iconHtml = `<img src="${currentIconUrl()}" class="profile-icon" loading="lazy" decoding="async" />`;
 
   const moneyDisplay = money < 0 ? `-${Math.abs(money).toLocaleString()}` : money.toLocaleString();
   const moneyCls = 'chip-money' + (money < 0 ? ' chip-money-negative' : '');
@@ -4064,6 +4302,7 @@ function saveCompletedRun(overallRank, overallScore, releasedCount, totalUnitsSo
   const record = {
     playerId: s.playerId,
     playerName: s.playerName || 'タケル',
+    iconUrl: currentIconUrl(),
     bandName: s.bandName || 'タケルバンド',
     overallRank, overallScore,
     agencyStatus: s.agencyStatus || 'unsigned',
@@ -5094,6 +5333,8 @@ function render() {
 
 document.addEventListener('DOMContentLoaded', () => {
   // 初回起動ならアカウント名の入力から。2回目以降はそのままタイトルへ。
+  loadProfileIcon();
+  loadVolumeSettings();
   appPhase = initialAppPhase();
   preloadCriticalImages();
   render();

@@ -1390,6 +1390,247 @@
     border-radius: 10px;
     color: #EDEDED;
   }
+  /* ===== 作曲・レコーディングの見出しバナー ===== */
+  .craft-hero {
+    position: relative; overflow: hidden;
+    margin: 10px 14px 14px;
+    border-radius: 14px;
+    min-height: 116px;
+    background-size: cover; background-position: center;
+    border: 1px solid rgba(232,196,104,0.28);
+    display: flex; align-items: flex-end;
+  }
+  .craft-hero-shade {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(10,8,6,0.88) 0%, rgba(10,8,6,0.62) 55%, rgba(10,8,6,0.2) 100%);
+  }
+  .craft-hero-char {
+    position: absolute; right: 8px; bottom: 0;
+    height: 112px; object-fit: contain; object-position: bottom center;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6));
+  }
+  .craft-hero-text { position: relative; padding: 12px 14px; }
+  .craft-hero-label {
+    margin: 0; font-size: 9px; font-weight: 900; letter-spacing: 0.22em;
+    color: rgba(232,196,104,0.8);
+  }
+  .craft-hero-title { margin: 3px 0 0; font-size: 19px; font-weight: 900; color: #F5EEDD; }
+  .craft-hero-sub { margin: 3px 0 0; font-size: 10.5px; color: rgba(255,255,255,0.6); }
+  .craft-hero-badge {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    margin-top: 8px; padding: 3px 10px; border-radius: 999px;
+    background: rgba(10,8,6,0.7);
+    border: 1px solid rgba(232,196,104,0.45);
+  }
+  .craft-badge-label { font-size: 9px; letter-spacing: 0.08em; color: rgba(255,255,255,0.6); }
+  .craft-badge-value { font-size: 15px; font-weight: 900; color: #E8C468; line-height: 1.2; }
+  /* 制作中の進捗 */
+  .craft-progress {
+    margin: 0 14px 14px; padding: 12px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .craft-progress-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11.5px; color: rgba(255,255,255,0.6); margin-bottom: 8px;
+  }
+  .craft-progress-head b { font-size: 15px; color: #E8C468; }
+  .craft-bar {
+    height: 10px; border-radius: 5px; overflow: hidden;
+    background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.07);
+  }
+  .craft-bar-fill {
+    height: 100%; border-radius: 5px;
+    background: linear-gradient(90deg, #C9A44E, #E8C468);
+    transition: width 0.4s ease;
+  }
+  .craft-progress-note { margin: 8px 0 0; font-size: 10.5px; color: rgba(255,255,255,0.4); }
+  /* ブロック共通 */
+  .craft-block { padding: 0 14px 16px; }
+  .craft-block-label {
+    margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
+    color: #E8C468;
+  }
+  .craft-block-hint {
+    font-weight: 400; letter-spacing: 0; font-size: 10px;
+    color: rgba(255,255,255,0.4); margin-left: 6px;
+  }
+  .craft-title-row { display: flex; gap: 8px; }
+  .craft-title-input { flex: 1; }
+  .craft-dice {
+    flex: none; width: 46px; border-radius: 10px; cursor: pointer;
+    font-size: 17px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #F0E6D2;
+  }
+  .craft-dice:active { background: rgba(232,196,104,0.2); }
+  /* ジャンルカード */
+  .genre-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .genre-card {
+    display: flex; flex-direction: column; align-items: stretch; gap: 5px;
+    padding: 9px 8px; border-radius: 10px; cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: transform 0.08s, background 0.12s;
+  }
+  .genre-card:active { transform: scale(0.97); }
+  .genre-card-on {
+    background: rgba(232,196,104,0.14);
+    border-color: var(--gTier, #E8C468);
+    box-shadow: 0 0 0 1px var(--gTier, #E8C468) inset;
+  }
+  .genre-card-name { font-size: 12.5px; font-weight: 800; color: #F0E6D2; }
+  .genre-card-bar {
+    display: block; height: 4px; border-radius: 2px;
+    background: rgba(0,0,0,0.4); overflow: hidden;
+  }
+  .genre-card-fill { display: block; height: 100%; background: var(--gTier, #E8C468); }
+  .genre-card-tier { font-size: 9px; color: var(--gTier, #E8C468); }
+  /* CD種別カード */
+  .cd-type-list { display: flex; flex-direction: column; gap: 8px; }
+  .cd-type-card {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 12px; border-radius: 12px; cursor: pointer; text-align: left;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    transition: transform 0.08s, background 0.12s;
+  }
+  .cd-type-card:active { transform: translateX(3px); background: rgba(255,255,255,0.08); }
+  .cd-type-card:disabled { opacity: 0.45; cursor: default; }
+  .cd-type-disc {
+    position: relative; flex: none;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: conic-gradient(from 210deg, #3a3a44, #7a7a88, #3a3a44, #9a9aa8, #3a3a44);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+  }
+  .cd-type-hole {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #14141a; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+  }
+  .cd-type-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .cd-type-name { font-size: 15px; font-weight: 800; color: #F0E6D2; }
+  .cd-type-sub { font-size: 10.5px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+  .cd-type-need { font-size: 10.5px; color: #E06A6A; margin-top: 3px; }
+  .cd-type-arrow { color: rgba(255,255,255,0.3); font-size: 20px; flex: none; }
+  /* ===== 音量スライダー ===== */
+  .volume-row { cursor: default; align-items: center; }
+  .volume-row .row-text { flex: 1; }
+  .volume-value { color: #E8C468; font-weight: 800; font-size: 12px; margin-left: 6px; }
+  .volume-slider {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 5px; margin: 9px 0 2px;
+    border-radius: 3px; background: rgba(255,255,255,0.14);
+    outline: none; cursor: pointer;
+  }
+  .volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: linear-gradient(180deg, #E8C468, #C9A44E);
+    border: 2px solid #1B1508;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  .volume-slider::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #E8C468; border: 2px solid #1B1508; cursor: pointer;
+  }
+  /* ===== アイコン選択 ===== */
+  .icon-pick-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin: 8px 0 14px;
+  }
+  .icon-pick {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 4px; border-radius: 10px; cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    border: 2px solid transparent;
+  }
+  .icon-pick img {
+    width: 52px; height: 52px; border-radius: 50%;
+    object-fit: cover; object-position: top center;
+    background: rgba(0,0,0,0.3);
+  }
+  .icon-pick span { font-size: 10px; color: rgba(255,255,255,0.65); }
+  .icon-pick-on { border-color: #E8C468; background: rgba(232,196,104,0.12); }
+  .icon-pick-on span { color: #E8C468; }
+  /* ===== プレイヤー設定ダイアログ ===== */
+  .player-setting-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px; margin: 6px 0 14px;
+    border-radius: 10px; background: rgba(255,255,255,0.04);
+  }
+  .player-setting-icon {
+    width: 46px; height: 46px; border-radius: 50%;
+    object-fit: cover; object-position: top center;
+    border: 1px solid rgba(232,196,104,0.4);
+  }
+  .player-setting-text { text-align: left; }
+  .player-setting-name { margin: 0; font-size: 15px; font-weight: 800; color: #F0E6D2; }
+  .player-setting-sub { margin: 2px 0 0; font-size: 10.5px; color: rgba(255,255,255,0.45); }
+  /* ランキングの顔アイコン */
+  .rank-face {
+    width: 34px; height: 34px; flex: none; border-radius: 50%;
+    object-fit: cover; object-position: top center;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  /* ===== 追加ライブの会場一覧 ===== */
+  .venue-list { padding: 0 14px 10px; }
+  .venue-card {
+    display: block; width: 100%; text-align: left;
+    padding: 12px; margin-bottom: 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-left: 3px solid rgba(255,255,255,0.2);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: transform 0.08s, background 0.12s;
+  }
+  .venue-card:active { transform: translateX(2px); background: rgba(255,255,255,0.08); }
+  .venue-card:disabled { opacity: 0.5; cursor: default; }
+  .venue-card.venue-good { border-left-color: #E8C468; }
+  .venue-card.venue-mid  { border-left-color: #6EA8E0; }
+  .venue-card.venue-bad  { border-left-color: #E06A6A; }
+  .venue-card-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    margin-bottom: 8px;
+  }
+  .venue-card-name { font-size: 14px; font-weight: 800; color: #F0E6D2; }
+  .venue-card-cap { font-size: 10.5px; color: rgba(255,255,255,0.45); flex: none; }
+  .venue-card-bar {
+    height: 8px; border-radius: 4px; overflow: hidden;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .venue-card-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #6EA8E0, #8FBF6A); }
+  .venue-good .venue-card-fill { background: linear-gradient(90deg, #C9A44E, #E8C468); }
+  .venue-bad  .venue-card-fill { background: linear-gradient(90deg, #8A3D3D, #E06A6A); }
+  .venue-card-figures {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-top: 6px;
+  }
+  .venue-card-aud { font-size: 11.5px; color: rgba(255,255,255,0.65); }
+  .venue-card-aud b { color: #F0E6D2; font-size: 13px; }
+  .venue-card-pct { font-size: 13px; font-weight: 900; color: rgba(255,255,255,0.55); }
+  .venue-good .venue-card-pct { color: #E8C468; }
+  .venue-bad  .venue-card-pct { color: #E06A6A; }
+  .venue-card-costs {
+    display: flex; gap: 16px; margin-top: 7px;
+    font-size: 11px; color: rgba(255,255,255,0.5);
+  }
+  .venue-card-costs b { color: rgba(255,255,255,0.8); font-weight: 700; }
+  .venue-card-note {
+    margin: 8px 0 0; font-size: 10.5px; line-height: 1.5;
+    color: rgba(255,255,255,0.55);
+  }
+  .venue-good .venue-card-note { color: #E8C468; }
+  .venue-bad  .venue-card-note { color: #E06A6A; }
+  .venue-card-short { color: #E06A6A !important; }
+  .venue-card-locked { cursor: default; opacity: 0.45; border-left-color: rgba(255,255,255,0.12); }
+  .venue-card-lock { margin: 0; font-size: 11px; color: rgba(255,255,255,0.5); }
   /* ===== ランキング ===== */
   .rank-sort-row { display: flex; gap: 6px; padding: 0 14px 12px; }
   .rank-sort-btn {
