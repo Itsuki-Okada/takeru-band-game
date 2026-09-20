@@ -2413,6 +2413,8 @@ function animateCountUp(el, from, to, duration, formatFn) {
 function bgHud(opts) {
   opts = opts || {};
   suppressStatusBar = true;
+  // どの画面でも数字が見えるようにする。ホーム以外は横1列のコンパクト表示。
+  const compact = !opts.showStats;
   const s = window.GameState;
   const weeksRemaining = Math.max(0, window.GameData.TOTAL_TURNS - s.turn + 1);
   const maxHealth = s.maxHealthMult || 100;
@@ -2421,7 +2423,7 @@ function bgHud(opts) {
   const barWidthPct = maxHealth > 0 ? Math.max(0, Math.min(100, (initialHealth / maxHealth) * 100)) : 0;
 
   let statsHtml = '';
-  if (opts.showStats) {
+  {
     const money = Math.round(s.money);
     const followers = Math.round(s.followers);
     const fame = Math.round(s.fame);
@@ -2429,7 +2431,14 @@ function bgHud(opts) {
     const initFollowers = lastRenderedFollowers === null ? followers : lastRenderedFollowers;
     const initFame = lastRenderedFame === null ? fame : lastRenderedFame;
     const moneyLabel = (v) => (v < 0 ? '-¥' + Math.abs(v).toLocaleString() : '¥' + v.toLocaleString());
-    statsHtml = `
+    statsHtml = compact
+      ? `
+      <div class="home-hud-stats home-hud-stats-compact">
+        <div class="hud-stat-row"><span class="hud-stat-label">💰</span><span class="hud-stat-value" id="hudMoney">${moneyLabel(initMoney)}</span></div>
+        <div class="hud-stat-row"><span class="hud-stat-label">👥</span><span class="hud-stat-value" id="hudFollowers">${initFollowers.toLocaleString()}</span></div>
+        <div class="hud-stat-row"><span class="hud-stat-label">⭐</span><span class="hud-stat-value" id="hudFame">${initFame.toLocaleString()}</span></div>
+      </div>`
+      : `
       <div class="home-hud-stats">
         <div class="hud-stat-row"><span class="hud-stat-label">所持金</span><span class="hud-stat-value" id="hudMoney">${moneyLabel(initMoney)}</span></div>
         <div class="hud-stat-row"><span class="hud-stat-label">フォロワー</span><span class="hud-stat-value" id="hudFollowers">${initFollowers.toLocaleString()}人</span></div>
