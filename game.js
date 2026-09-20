@@ -138,7 +138,8 @@ const PRACTICE_MENUS = [
   { key: 'camp', name: '合宿', cost: 10000, stats: ['vocal', 'guitar', 'compose'], healthCost: 20, exp: 16, expGain: { str: [10, 20], ski: [10, 20], int: [10, 20], men: [10, 20] } },
 ];
 // 練習レベル(1〜5)による経験点倍率。5回practice実行するごとに1レベル上がる(最大Lv5)。
-const PRACTICE_LEVEL_MULTIPLIER = [1, 1.75, 2.5, 3.25, 4.0]; // index 0=Lv1 … 4=Lv5
+// 同じ練習を続けるほど効率が上がるので、練習に寄せた立ち回りがステータスで報われる。
+let PRACTICE_LEVEL_MULTIPLIER = [1, 2.0, 3.25, 4.75, 6.5]; // index 0=Lv1 … 4=Lv5
 const PRACTICE_LEVEL_UP_EVERY = 5;
 function getPracticeLevel(key) {
   const count = (state.practiceCount && state.practiceCount[key]) || 0;
@@ -389,6 +390,8 @@ function stageNerveMult(venue) {
 const LIVE_EXP_BY_VENUE = {
   small: 10, mid: 20, zepp: 30, hall: 40, budokan: 50,
 };
+// 上の値は満員だった時の量。客席が埋まらないとここまで減る。
+let LIVE_EXP_FILL_MIN = 0.55;
 
 // 経験点の内訳を「筋力経験点を10得た」のように1行ずつにする
 function expSegments(applied) {
@@ -1558,9 +1561,9 @@ let INDIE_OVERALL_REQUIRED = 50;   // Dランク相当
 // 条件を満たしても、すぐ声がかかるわけではない。満たしている間だけ毎回抽選する。
 // 1年半で約20%、2年で約40%が到達するように、実際に2年ぶんを回して決めた数値。
 let MAJOR_AUDIENCE_REQUIRED = 700;      // 1本のライブで呼べた最高動員
-let MAJOR_FAME_REQUIRED = 36000;
-let MAJOR_FOLLOWERS_REQUIRED = 28800;
-let MAJOR_OVERALL_REQUIRED = 80;        // Aランク相当(ライブで経験点が入るぶん基準を上げた)
+let MAJOR_FAME_REQUIRED = 34000;
+let MAJOR_FOLLOWERS_REQUIRED = 27200;
+let MAJOR_OVERALL_REQUIRED = 74;        // Bランク相当
 let MAJOR_OFFER_CHANCE = 0.40;        // 条件を満たせば数週以内に必ず声がかかる(=抽選ではなく条件で決まる)
 
 // メジャーの給料。知名度・フォロワー・ライブの動員から20万〜50万の間で決まる。
@@ -2001,8 +2004,11 @@ function doLive(memberKeys, opts) {
   state.liveExtraAudience = 0;   // 宣伝の効果はこのライブで使い切る
 
   // 経験点(全カテゴリ、来場数・出来で変動)
-  // 経験点は会場の規模ぶんを4カテゴリすべてに配る(小規模10 / 中規模20 / Zepp30 …)
-  const expPerCategory = LIVE_EXP_BY_VENUE[venue.key] || 10;
+  // 経験点は会場の規模ぶんを4カテゴリすべてに配る(小規模10 / 中規模20 / Zepp30 …)。
+  // ただし満員に近いほど身になる。ガラガラのライブは学びも少ない。
+  const baseExp = LIVE_EXP_BY_VENUE[venue.key] || 10;
+  const expFillMult = LIVE_EXP_FILL_MIN + fill * (1 - LIVE_EXP_FILL_MIN);
+  const expPerCategory = Math.max(1, Math.round(baseExp * expFillMult));
   const liveExp = grantExp({ str: expPerCategory, ski: expPerCategory, int: expPerCategory, men: expPerCategory });
 
   const memberNote = memberKeys.length ? ` / サポート${memberKeys.length}名雇用` : '';

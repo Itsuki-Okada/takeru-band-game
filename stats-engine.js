@@ -78,9 +78,17 @@ const StatsEngine = (function () {
 
   // ---- ステータスを1ポイント上げるのに必要な経験点(ランクが上がるほど増加) ----
   const RANK_BASE_COST = [6, 9, 13, 18, 24, 32, 42, 55, 70]; // G,F,E,D,C,B,A,S,S1以降(共通)
+  // 上のランクほど伸びにくくする度合い。1.0で従来どおり。
+  // 大きくすると、高ランク帯の1ポイントが重くなる。
+  let COST_CURVE = 1.15;
+  function setCostCurve(v) { COST_CURVE = Math.max(0.1, Number(v) || 1); }
   function pointCost(currentValue) {
     const idx = Math.min(getRankIndex(currentValue), RANK_BASE_COST.length - 1);
-    return RANK_BASE_COST[idx];
+    const base = RANK_BASE_COST[idx];
+    if (COST_CURVE === 1) return base;
+    // Dランク(idx3)を境に、それより上だけ倍率を効かせる。序盤の伸びはそのまま残す。
+    const steps = Math.max(0, idx - 3);
+    return Math.max(1, Math.round(base * Math.pow(COST_CURVE, steps)));
   }
 
   // ---- 経験点をプールへ加算 ----
@@ -400,7 +408,7 @@ const StatsEngine = (function () {
     RANK_TABLE, MOTIVATION_LEVELS,
     ABILITIES,
     createEmptyExpPool, createEmptyStats, createEmptyInvested,
-    getRank, getRankIndex, pointCost,
+    getRank, getRankIndex, pointCost, setCostCurve,
     gainExp, getExpMultiplier, applyMultiplier,
     raiseStat, calcOverallScore, getOverallRank,
     tryUnlockAbility, hasSense, grantRandomNegative, rollStartingAbility,
