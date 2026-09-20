@@ -1200,14 +1200,36 @@
     font-weight: 700;
     color: #EDEDED;
   }
-  .title-account {
-  text-align: center;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.55);
-  margin: 0 0 2px;
-}
-.title-account b { color: #E8C46A; font-size: 12px; }
+  /* ===== タイトルのプレイヤー名プレート(右上・タップで変更) ===== */
+  .title-player-plate {
+    position: absolute; top: 14px; right: 14px; z-index: 3;
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px 5px 5px;
+    border-radius: 999px;
+    background: rgba(20, 18, 14, 0.72);
+    border: 1px solid rgba(232, 196, 104, 0.4);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.45);
+    backdrop-filter: blur(3px);
+    cursor: pointer;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .title-player-plate:active { transform: scale(0.96); border-color: rgba(232,196,104,0.8); }
+  .title-player-face {
+    width: 28px; height: 28px; flex: none;
+    border-radius: 50%; object-fit: cover; object-position: top center;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(232,196,104,0.45);
+  }
+  .title-player-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+  .title-player-label {
+    font-size: 8px; font-weight: 800; letter-spacing: 0.18em;
+    color: rgba(232,196,104,0.75);
+  }
+  .title-player-name {
+    font-size: 13px; font-weight: 800; color: #F0E6D2;
+    max-width: 104px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .title-player-edit { font-size: 11px; color: rgba(255,255,255,0.4); flex: none; }
 .intro-sub {
   text-align: center;
   font-size: 12px;

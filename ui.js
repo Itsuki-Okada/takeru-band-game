@@ -677,8 +677,17 @@ function screenTitleFull() {
     </div>
   ` : '';
 
+  const accountName = getAccountName() || '未設定';
   return `
     <div class="title-screen">
+      <button class="title-player-plate" onclick="openAccountNameEdit()">
+        <img src="${idlePortrait()}" class="title-player-face" />
+        <span class="title-player-text">
+          <span class="title-player-label">PLAYER</span>
+          <span class="title-player-name">${accountName}</span>
+        </span>
+        <span class="title-player-edit">✎</span>
+      </button>
       <div class="title-hero">
         <div class="title-logo-wrap">${titleLogoSvg()}</div>
         <div class="title-char-wrap">
@@ -689,7 +698,6 @@ function screenTitleFull() {
       <div class="cd-carousel" id="cdCarousel" onscroll="handleCdCarouselScroll()">${jackets}</div>
       <div class="cd-dots" id="cdDots">${dots}</div>
       ${successOverlay}
-      <p class="title-account">PLAYER: <b>${getAccountName() || '未設定'}</b></p>
       <p class="title-caption">©2026 iroiro Co. All rights reserved.</p>
     </div>
   `;
@@ -732,29 +740,29 @@ const CHARA_LOG_ENTRIES = [
     profile: 'バンドが活動休止になり、気づけば28歳。<br>「30歳までに売れなかったら就職」という母との約束を抱えて、残り2年半で新しいバンドを立ち上げた。<br><br>能力は毎回ランダムで、サクセスごとに違う人生を送ることになる。',
     getImg: () => (window.HOME_CHAR_STATES && window.HOME_CHAR_STATES.normal) || '' },
   { key: 'kisara', name: 'きさら', npc: 'kisara', part: 'ベース', band: 'バンドメンバー',
-    catch: '演奏A。頼れる相棒。',
-    profile: '最初からバンドにいるベーシスト。演奏の腕は作中随一で、デザインもこなす。<br><br>たまに競馬に誘ってくる。勝てば大きいが、負けると悪いクセがつくこともあるので乗るかどうかは自己責任。',
+    catch: '演奏A',
+    profile: 'なんだかんだ主人公のわがままを聞いてくれる頼れる存在<br>競馬が好きらしい。',
     getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.kisara) ? window.MEMBER_CHARS.kisara.idle : '' },
   { key: 'itsuki', name: 'いつき', npc: 'itsuki', part: 'ドラム', band: 'バンドメンバー',
-    catch: 'メンタルB。無口で打たれ強い。',
-    profile: '最初からバンドにいるドラマー。口数は少ないが、どんな状況でも淡々と叩き続ける。<br><br>忍耐力◯を持ち、メンタルの高さはメンバー随一。',
+    catch: 'メンタルB',
+    profile: '口数が少なく根暗だがたまにうるさいときがある。',
     getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.itsuki) ? window.MEMBER_CHARS.itsuki.idle : '' },
   { key: 'ryohei', name: 'りょーぺ', npc: 'ryohei', part: 'ギター/ボーカル', band: 'アフターワーク',
-    catch: 'メンタルB。打ち上げの主。',
-    profile: '初めてのライブで声をかけてくるバンドマン。人当たりがよく、コミュ力◎。<br><br>2,000円を貸してくれと言ってきたり、対バンに誘ってきたりする。付き合いを大事にすると親密度が上がり、対バンの機会が増える。',
+    catch: 'メンタルB',
+    profile: 'バンド「アフターワーク」のギターボーカル。<br>コミュ力の塊。多分。',
     getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.ryohei) ? window.MEMBER_CHARS.ryohei.idle : '' },
   { key: 'takuma', name: 'たくま', npc: 'takuma', part: 'ギター/ボーカル', band: 'KAME',
-    catch: '歌唱A。歌一本で押し切る男。',
-    profile: 'サクセス開始から3ヶ月以内に必ず出会うバンドマン。<br><br>歌唱力はAだが演奏はEと極端で、技術ではなく歌の力で客を掴むタイプ。度胸◯を持ち、大きな会場でも物怖じしない。<br><br>仲良くなると対バンに誘ってくれる。',
-    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.takuma) ? window.MEMBER_CHARS.takuma.idle : ((window.MEMBER_CHARS && window.MEMBER_CHARS.takuma) ? window.MEMBER_CHARS.takuma.convo : '') },
+    catch: '歌唱A',
+    profile: 'バンド「KAME」のギターボーカル。<br>年々黒目が大きくなっている。<br>彼の目に光が宿るときはくるのか。<br>亀を飼っている(かめきち)',
+    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.takuma) ? window.MEMBER_CHARS.takuma.idle : '' },
   { key: 'hori', name: '堀 良音', npc: null, part: 'レーベル担当', band: 'ロケットミュージックエンターテイメント',
-    catch: 'インディーズの扉を開く人。',
-    profile: '知名度かフォロワーが2,500を超え、総合力がDランク以上になると声をかけてくるレーベルの担当者。<br><br>トラスターレコーズ・オリオンレコーズ・イレブンバックレコーズの3つから所属先を選ばせてくれる。どれを選ぶかでレコーディング費・CD売上・ライブ動員のどれが伸びるかが変わる。',
+    catch: 'スカウト',
+    profile: 'ロケットミュージックエンターテイメントのスカウト<br>インディーズレーベルも数社運営している。',
     getImg: () => window.HORI_IMG || '' },
   { key: 'nasakenai', name: 'ナサケナーイ博士', npc: null, part: '???', band: '???',
-    catch: '願いを叶える、かもしれない。',
-    profile: '夜道でまれに出会う謎の人物。ひとつだけ願いを聞いてくれる。<br><br>「もっと強くなりたい」は成功すれば全ステータス+10と経験点100ずつという破格の見返りだが、成功率は25%。失敗すると全ステータス-7に加え、<b>悪いクセがついてしまう</b>ことも。<br><br>2年半で一度しか会えない。',
-    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.nasakenai) ? window.MEMBER_CHARS.nasakenai.convo : ((window.HOME_CHAR_STATES && window.HOME_CHAR_STATES.normal) || '') },
+    catch: '???',
+    profile: '夜道でまれに出会う謎の人物。ひとつだけ願いを聞いてくれる。',
+    getImg: () => window.DR_NASAKENAI_IMG || '' },
 ];
 let charaProfileKey = null;
 
