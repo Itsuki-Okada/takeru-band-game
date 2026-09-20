@@ -1961,7 +1961,7 @@ const LIVE_MEMBER_ORDER = ['bass', 'keyboard', 'drums'];
 const VENUE_STAGE_BOTTOM = {
   street: '4%',
   small: '9%',
-  mid: '16%',
+  mid: '12%',
   zepp: '18%',
   hall: '20%',
   budokan: '22%',
