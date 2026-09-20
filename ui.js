@@ -153,6 +153,7 @@ function toggleBgmMute() {
 
 function setTab(tab) {
   if (isNavLocked() && tab !== currentTab) return; // 吹き出し表示中・ローディング中は画面遷移をブロック
+  try { preloadImages(imagesForTab(tab)); } catch (e) { /* 先読みは失敗しても進行に影響させない */ }
   homeMenuOpen = false;
   if (currentTab === 'job' && tab !== 'job') {
     jobScreenState = { selected: null, phase: 'confirm' };
@@ -249,6 +250,61 @@ const HOWTO_SECTIONS = [
 
 let tempPlayerName = '';
 let tempBandName = '';
+
+// ===== 画像の先読み =====
+// 画像はimg/に置いてあり、必要になった時に読み込まれる。
+// ただし暗転明けに背景が間に合わないと一瞬白く見えるので、
+// 「すぐ使うもの」は先に、「そのうち使うもの」は手が空いた時に裏で取っておく。
+const preloadedImages = new Set();
+
+function preloadImages(urls) {
+  (urls || []).forEach(url => {
+    if (!url || typeof url !== 'string' || preloadedImages.has(url)) return;
+    if (url.indexOf('img/') !== 0) return;   // data URIや音声は対象外
+    preloadedImages.add(url);
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+  });
+}
+
+// タブごとに「その画面で必ず出る画像」
+function imagesForTab(tab) {
+  const s = window.GameState;
+  switch (tab) {
+    case 'home':   return [homeBgUrl(), homeCharUrl()];
+    case 'job':    return Object.values(window.JOB_THUMB || {});
+    case 'practice': return Object.values(window.PRACTICE_BG || {});
+    case 'live':   return [window.VENUE_BG ? window.VENUE_BG[(window.GameData.pickVenueForPlayer() || {}).key] : null];
+    case 'goods':  return Object.values(window.GOODS_THUMB || {});
+    case 'song':   return Object.values(window.STUDIO_BG || {});
+    default: return [];
+  }
+}
+
+// 起動直後に最低限のものだけ先に確保する
+function preloadCriticalImages() {
+  preloadImages([
+    (window.HOME_CHAR_STATES && window.HOME_CHAR_STATES.normal) || null,
+    window.TITLE_LOGO,
+    window.HOME_BG,
+  ]);
+}
+
+// 手が空いたタイミングで、よく使う背景を裏で温めておく
+function preloadCommonImagesWhenIdle() {
+  const run = () => {
+    preloadImages([
+      ...Object.values(window.JOB_THUMB || {}),
+      ...Object.values(window.VENUE_BG || {}),
+      ...Object.values(window.PRACTICE_BG || {}),
+      ...Object.values(window.HOME_CHAR_STATES || {}),
+      ...Object.values(window.RECORDING_CHARS || {}),
+    ]);
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 4000 });
+  else setTimeout(run, 2500);
+}
 
 // ===== アカウント名 =====
 // プレイヤー名は「アカウント名」として端末にひとつだけ持ち、サクセスをまたいで共通で使う。
@@ -705,7 +761,7 @@ let charaProfileKey = null;
 function screenCharaLogFull() {
   const tiles = CHARA_LOG_ENTRIES.map(c => `
     <div class="chara-log-tile" onclick="charaProfileKey='${c.key}';render();">
-      <img src="${c.getImg()}" class="chara-log-thumb" />
+      <img src="${c.getImg()}" class="chara-log-thumb" loading="lazy" decoding="async" />
       <p class="chara-log-name">${c.name}</p>
     </div>`).join('');
   return `
@@ -994,7 +1050,7 @@ function screenJob() {
   const cards = window.GameData.JOBS.map(j => {
     return `
     <div class="job-card" onclick="jobScreenState={selected:'${j.key}',phase:'confirm'};render();">
-      <img src="${window.JOB_THUMB[j.key]}" class="job-card-img" />
+      <img src="${window.JOB_THUMB[j.key]}" class="job-card-img" loading="lazy" decoding="async" />
       <p class="job-card-name">${j.name}</p>
       <p class="job-card-detail">体力-${j.healthCost}%</p>
       <p class="job-card-wage">時給${j.wage.toLocaleString()}円(×8H)</p>
@@ -1154,7 +1210,7 @@ function screenPractice() {
     const bgKey = PRACTICE_BG_MAP[m.key] || 'small';
     const lv = window.GameData.getPracticeLevel(m.key);
     return `<div class="job-card" onclick="practiceScreenState={selected:'${m.key}',phase:'confirm',useCoupon:false,result:null};render();">
-      <img src="${window.PRACTICE_BG[bgKey]}" class="job-card-img" />
+      <img src="${window.PRACTICE_BG[bgKey]}" class="job-card-img" loading="lazy" decoding="async" />
       <p class="job-card-name">${m.name} <span style="color:#E8C468;">Lv.${lv}</span></p>
       <p class="job-card-wage">¥${m.cost.toLocaleString()}</p>
     </div>`;
@@ -2008,8 +2064,8 @@ function screenRanking() {
     const valueLabel = rankingActiveTab === 'assets' ? yen(e.value) : `${e.value.toLocaleString()}${unit}`;
     const extraLine = e.extra ? `<p class="row-sub">「${e.extra}」</p>` : '';
     const iconHtml = e.isPlayer
-      ? `<img src="${profileIconUrl || window.RECORDING_CHARS.guitar_idle}" class="ranking-icon" />`
-      : `<img src="${window.RECORDING_CHARS.guitar_idle}" class="ranking-icon" />`;
+      ? `<img src="${profileIconUrl || window.RECORDING_CHARS.guitar_idle}" class="ranking-icon" loading="lazy" decoding="async" />`
+      : `<img src="${window.RECORDING_CHARS.guitar_idle}" class="ranking-icon" loading="lazy" decoding="async" />`;
     const entryJson = JSON.stringify(e).replace(/"/g, '&quot;');
     const nameOnclick = e.isPlayer ? "setTab('status')" : `openRivalStatus(${entryJson})`;
     return `
@@ -2438,7 +2494,7 @@ function screenHostOffer() {
     const cards = window.GameData.VENUES.map(v => {
       const thumb = window.VENUE_BG[v.key];
       const thumbHtml = thumb
-        ? `<img src="${thumb}" class="job-card-img" />`
+        ? `<img src="${thumb}" class="job-card-img" loading="lazy" decoding="async" />`
         : `<div class="job-card-img" style="display:flex;align-items:center;justify-content:center;background:#1B1B22;font-size:22px;">🎫</div>`;
       return `<div class="job-card" onclick="hostOfferState.venue='${v.key}';render();">${thumbHtml}<p class="job-card-name">${v.name}</p><p class="job-card-wage">¥${v.cost.toLocaleString()}</p></div>`;
     }).join('');
@@ -2908,6 +2964,8 @@ function playCompleteWipeTransition(onMidpoint, showText, isDateChange) {
       ${textHtml}
       <div class="wipe-panel"></div>
     </div>`;
+  // 暗転が画面を覆っている520msのあいだに、次の画面の画像を取りに行かせる
+  try { preloadImages(imagesForTab(currentTab)); } catch (e) { /* 同上 */ }
   setTimeout(() => { onMidpoint(); }, 520);
   setTimeout(() => {
     if (root.querySelector('.wipe-transition-overlay')) root.innerHTML = '';
@@ -3299,7 +3357,7 @@ function screenGoods() {
       const stock = (s.goodsInventory || []).filter(inv => inv.key === g.key).reduce((a, inv) => a + inv.remaining, 0);
       return `
       <div class="job-card" onclick="goodsFlowState={type:'${g.key}',quantity:${g.minQty},price:${g.priceMin}};render();">
-        <img src="${window.GOODS_THUMB[g.key]}" class="job-card-img" style="background:#fff;object-fit:contain;" />
+        <img src="${window.GOODS_THUMB[g.key]}" class="job-card-img" loading="lazy" decoding="async" style="background:#fff;object-fit:contain;" />
         <p class="job-card-name">${g.name}</p>
         <p class="job-card-detail">在庫 ${stock.toLocaleString()}個</p>
         <p class="job-card-wage">¥${g.priceMin.toLocaleString()}〜¥${g.priceMax.toLocaleString()}</p>
@@ -3643,7 +3701,7 @@ function statusBar() {
   const health = Math.round(s.health);
 
   const iconHtml = profileIconUrl
-    ? `<img src="${profileIconUrl}" class="profile-icon" />`
+    ? `<img src="${profileIconUrl}" class="profile-icon" loading="lazy" decoding="async" />`
     : `<div class="profile-icon profile-icon-placeholder">🎤</div>`;
 
   const moneyDisplay = money < 0 ? `-${Math.abs(money).toLocaleString()}` : money.toLocaleString();
@@ -3715,7 +3773,7 @@ function bottomNav() {
   const items = NAV_TABS.map(t => (major && t.tab === 'job')
       ? { tab: 'job', asset: 'btn_character', label: '事務所' } : t).map(t => `
     <button class="nav-btn ${currentTab === t.tab ? 'nav-active' : ''}" ${locked ? 'disabled' : ''} onclick="setTab('${t.tab}')">
-      <img src="${window.NAV_ICONS[t.asset]}" class="nav-icon" />
+      <img src="${window.NAV_ICONS[t.asset]}" class="nav-icon" loading="lazy" decoding="async" />
       <span class="nav-label">${t.label}</span>
       ${t.tab === 'friend' && pendingFriendCount > 0 ? `<span class="nav-badge">${pendingFriendCount}</span>` : ''}
     </button>
@@ -5029,8 +5087,10 @@ function render() {
 document.addEventListener('DOMContentLoaded', () => {
   // 初回起動ならアカウント名の入力から。2回目以降はそのままタイトルへ。
   appPhase = initialAppPhase();
+  preloadCriticalImages();
   render();
   updateBGM('title');
+  preloadCommonImagesWhenIdle();
   // ピンチズーム・ダブルタップズームを完全に無効化(iOS Safari対策含む)
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   let lastTouchEnd = 0;
