@@ -153,7 +153,8 @@ const StatsEngine = (function () {
     const statAvg = STAT_ORDER.reduce((sum, k) => sum + (state.stats[k] || 0), 0) / STAT_ORDER.length;
     const abilityBonus = (state.abilities || []).reduce((sum, a) => {
       const def = ABILITIES[a.key];
-      const bonus = { normal: 2, great: 4, gold: 8 }[a.tier] || 0;
+      // 超特殊能力は査定が大きい
+      const bonus = (def && def.super) ? 10 : ({ normal: 2, great: 4, gold: 8 }[a.tier] || 0);
       // マイナス能力は総合力を下げる
       return sum + (def && def.negative ? -bonus : bonus);
     }, 0);
@@ -254,6 +255,34 @@ const StatsEngine = (function () {
       tiers: [{ tier: 'normal', label: 'タフネス◯', cost: { str: 80 } }],
     },
 
+    // ===== 超特殊能力 =====
+    // フレンドと親密度100まで仲良くなると習得できる。査定(総合力)への加算も大きい。
+    // unlockType: 'friendship' … 経験点では取れず、そのキャラとの関係でしか手に入らない。
+    yataibone: {
+      name: '屋台骨',
+      effect: 'きさらがリズムで支えてくれる。ライブの出来が落ちにくくなり、最低でも実力どおりの演奏ができる',
+      unlockType: 'friendship', friendId: 'kisara', super: true,
+      tiers: [{ tier: 'gold', label: '屋台骨', cost: { ski: 200, str: 160, men: 120 } }],
+    },
+    fudou: {
+      name: '不動',
+      effect: 'いつきに倣って動じなくなる。風邪をひかず、熱も出さない',
+      unlockType: 'friendship', friendId: 'itsuki', super: true,
+      tiers: [{ tier: 'gold', label: '不動', cost: { men: 220, str: 160, int: 100 } }],
+    },
+    hitotarashi: {
+      name: '人たらし',
+      effect: 'りょーぺ直伝。親密度が大きく上がり、対バンの誘いをほぼ断られなくなる',
+      unlockType: 'friendship', friendId: 'ryohei', super: true,
+      tiers: [{ tier: 'gold', label: '人たらし', cost: { men: 200, int: 180, ski: 100 } }],
+    },
+    zesshou: {
+      name: '絶唱',
+      effect: 'たくまに学んだ歌。大きい会場ほど声が乗り、緊張が逆に力になる',
+      unlockType: 'friendship', friendId: 'takuma', super: true,
+      tiers: [{ tier: 'gold', label: '絶唱', cost: { str: 200, men: 180, ski: 100 } }],
+    },
+
     // ===== マイナス能力 =====
     // 経験点では習得できない。ナサケナーイ博士の失敗や、競馬で負けた時などに付く。
     stageFright: {
@@ -315,6 +344,10 @@ const StatsEngine = (function () {
       // センスやマイナス能力は、イベントの結果でしか付かない
       return { ok: false, reason: 'not_learnable' };
     }
+    if (def.unlockType === 'friendship') {
+      // 超特殊能力はフレンドとの親密度でしか手に入らない
+      return { ok: false, reason: 'friendship_only' };
+    }
     if (def.unlockType === 'mastery') {
       const mastery = (state.jobMastery && state.jobMastery[def.masteryJob]) || 0;
       if (mastery < 100) return { ok: false, reason: 'mastery_not_max' };
@@ -350,6 +383,59 @@ const StatsEngine = (function () {
       motivation: 2, // '普通'
       sick: false,
     };
+  }
+
+  // ---- 超特殊能力(親密度100で習得) ----
+  const FRIENDSHIP_ABILITY_REQUIRED = 100;
+
+  // そのフレンドに紐づく超特殊能力のキーを返す
+  function superAbilityFor(friendId) {
+    return Object.keys(ABILITIES).find(k => ABILITIES[k].unlockType === 'friendship' && ABILITIES[k].friendId === friendId) || null;
+  }
+
+  function hasAbilityKey(state, key) {
+    return (state.abilities || []).some(a => a.key === key);
+  }
+
+  // 超特殊能力を取るのに必要な経験点(センス◯などの割引は反映する)
+  function superAbilityCost(state, key) {
+    const def = ABILITIES[key];
+    if (!def || !def.tiers[0].cost) return {};
+    const raw = def.tiers[0].cost;
+    const discount = costMultiplier(state);
+    const out = {};
+    Object.keys(raw).forEach(c => { out[c] = Math.max(1, Math.round(raw[c] * discount)); });
+    return out;
+  }
+
+  // 習得できる状態か。親密度・未所持・経験点をそれぞれ見る。
+  // 戻り値: { ok, reason, key, cost, shortage }
+  function superAbilityStatus(state, friend) {
+    if (!friend || !friend.isNpc) return { ok: false, reason: 'not_npc' };
+    const key = superAbilityFor(friend.id);
+    if (!key) return { ok: false, reason: 'none' };
+    if (hasAbilityKey(state, key)) return { ok: false, reason: 'owned', key };
+    const cost = superAbilityCost(state, key);
+    if ((friend.intimacy || 0) < FRIENDSHIP_ABILITY_REQUIRED) {
+      return { ok: false, reason: 'intimacy', key, cost };
+    }
+    const shortage = Object.keys(cost).filter(c => (state.expPool[c] || 0) < cost[c]);
+    if (shortage.length > 0) return { ok: false, reason: 'exp', key, cost, shortage };
+    return { ok: true, key, cost };
+  }
+
+  function canLearnSuperAbility(state, friend) {
+    return superAbilityStatus(state, friend).ok;
+  }
+
+  function learnSuperAbility(state, friend) {
+    const st = superAbilityStatus(state, friend);
+    if (!st.ok) return null;
+    const def = ABILITIES[st.key];
+    Object.keys(st.cost).forEach(c => { state.expPool[c] -= st.cost[c]; });
+    state.abilities = state.abilities || [];
+    state.abilities.push({ key: st.key, tier: 'gold' });
+    return { key: st.key, name: def.name, label: def.tiers[0].label, effect: def.effect, cost: st.cost };
   }
 
   // ---- マイナス能力をランダムに1つ付ける(すでに持っているものは除く) ----
@@ -412,6 +498,8 @@ const StatsEngine = (function () {
     gainExp, getExpMultiplier, applyMultiplier,
     raiseStat, calcOverallScore, getOverallRank,
     tryUnlockAbility, hasSense, grantRandomNegative, rollStartingAbility,
+    FRIENDSHIP_ABILITY_REQUIRED, superAbilityFor, canLearnSuperAbility, learnSuperAbility,
+    superAbilityStatus, superAbilityCost,
     createInitialFoundation,
   };
 })();

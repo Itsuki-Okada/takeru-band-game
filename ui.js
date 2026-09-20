@@ -2841,6 +2841,64 @@ function screenFriend() {
   ` + logBox();
 }
 
+// フレンドとの絆で覚える超特殊能力のパネル。
+// 親密度と経験点の両方が要るので、足りないほうを出す。
+function superAbilityPanel(friend) {
+  const s = window.GameState;
+  const st = StatsEngine.superAbilityStatus(s, friend);
+  if (!st.key) return '';
+  const def = StatsEngine.ABILITIES[st.key];
+  const label = def.tiers[0].label;
+  const iv = friend.intimacy || 0;
+  const need = StatsEngine.FRIENDSHIP_ABILITY_REQUIRED;
+  const costHtml = st.cost
+    ? Object.entries(st.cost).map(([c, v]) => {
+        const have = s.expPool[c] || 0;
+        const short = have < v;
+        return `<span class="super-cost ${short ? 'super-cost-short' : ''}">${StatsEngine.EXP_CATEGORY_NAMES[c]} ${have}/${v}</span>`;
+      }).join('')
+    : '';
+  let footer;
+  if (st.reason === 'owned') {
+    footer = '<p class="super-note super-note-done">習得済み</p>';
+  } else if (st.reason === 'intimacy') {
+    footer = `<div class="super-bar"><div class="super-bar-fill" style="width:${Math.min(100, iv / need * 100)}%;"></div></div>
+      <p class="super-note">親密度 ${iv} / ${need} — もっと仲良くなると習得できる</p>`;
+  } else if (st.ok) {
+    footer = `<button class="super-learn-btn" onclick="learnSuperAbilityUI('${friend.id}')">「${label}」を習得する</button>`;
+  } else {
+    footer = `<p class="super-note super-note-short">経験点が足りません</p>`;
+  }
+  return `
+    <p class="section-label">絆の特殊能力</p>
+    <div class="super-panel ${st.reason === 'owned' ? 'super-panel-owned' : ''}">
+      <div class="super-head">
+        <span class="super-badge">超特殊</span>
+        <span class="super-name">${label}</span>
+      </div>
+      <p class="super-effect">${def.effect}</p>
+      ${st.reason !== 'owned' ? `<div class="super-costs">${costHtml}</div>` : ''}
+      ${footer}
+    </div>
+  `;
+}
+
+function learnSuperAbilityUI(friendId) {
+  const got = GameActions.learnSuperAbilityFrom(friendId);
+  if (!got) { playSfx('deny'); return; }
+  playSfx('fanfare', { minGap: 0 });
+  const s = window.GameState;
+  s.justSuperAbility = null;
+  showModal(`
+    <div class="modal-card">
+      <p class="modal-title">絆の特殊能力を習得！</p>
+      <p class="modal-sub"><b style="color:#E8C468;font-size:20px;">${got.label}</b></p>
+      <p class="modal-sub">${got.effect}</p>
+      <button class="modal-primary-btn" onclick="closeModal();">よし</button>
+    </div>
+  `);
+}
+
 function screenFriendDetail(friend) {
   if (friend.isNpc) {
     const npcImg = (window.MEMBER_CHARS && window.MEMBER_CHARS[friend.memberKey]) ? window.MEMBER_CHARS[friend.memberKey].convo : '';
@@ -2858,6 +2916,7 @@ function screenFriendDetail(friend) {
       <div class="list">${statRows}</div>
       <p class="section-label">特殊能力</p>
       <div style="padding:0 14px;display:flex;flex-wrap:wrap;gap:6px;">${abilityChips}</div>
+      ${superAbilityPanel(friend)}
     `;
   }
   const skills = friend.skills || {};

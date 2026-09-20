@@ -75,6 +75,7 @@ const state = {
   scheduledGuest: null,      // 次の定期ライブに出てもらうフレンド
   justLiveCancelled: null,   // 熱で中止になった時の通知
   justGuestReply: null,      // 対バンに誘った返事
+  justSuperAbility: null,    // 超特殊能力を覚えた時の通知
   nextLiveTurn: 6,          // 次回定期ライブのターン(6週ごと)
   lastLiveTurn: null,       // 直近でライブを打ったターン(客足の回復に使う)
   bestAudience: 0,          // 1回のライブで集めた最高動員(メジャーの条件に使う)
@@ -379,6 +380,7 @@ function stageNerveMult(venue) {
   const ratio = venue.capacity / draw;          // 1.0以下なら身の丈
   if (ratio <= 1.2) return 1;
   let penalty = Math.min(0.30, (ratio - 1.2) * 0.06);
+  if (hasAbility('zesshou')) return 1;   // 絶唱: 大舞台でも一切物怖じしない
   if (hasAbility('guts')) penalty *= 0.5;
   if (hasAbility('bigstage')) penalty *= 0.4;
   if (hasAbility('stageFright')) penalty *= 1.8;
@@ -392,6 +394,8 @@ const LIVE_EXP_BY_VENUE = {
 };
 // 上の値は満員だった時の量。客席が埋まらないとここまで減る。
 let LIVE_EXP_FILL_MIN = 0.55;
+// ライブに一緒に出たメンバーとの親密度が、1本ごとにこれだけ上がる
+let LIVE_INTIMACY_GAIN = 5;
 
 // 経験点の内訳を「筋力経験点を10得た」のように1行ずつにする
 function expSegments(applied) {
@@ -644,6 +648,24 @@ function checkTakumaMeeting() {
   state.justTakumaEvent = 'TKM1';
 }
 
+// ===== 超特殊能力(親密度100で習得) =====
+function learnSuperAbilityFrom(friendId) {
+  const f = state.friends.find(x => x.id === friendId);
+  if (!f) return null;
+  const got = StatsEngine.learnSuperAbility(state, f);
+  if (got) {
+    addLog(`${f.name}との絆から「${got.label}」を身につけた！`, 'money');
+    state.justSuperAbility = { ...got, friendName: f.name, memberKey: f.memberKey || f.id };
+    render();
+  }
+  return got;
+}
+
+function canLearnSuperFrom(friendId) {
+  const f = state.friends.find(x => x.id === friendId);
+  return StatsEngine.canLearnSuperAbility(state, f);
+}
+
 // ===== 定期ライブへの対バン誘い =====
 // 親密度50以上のフレンドを、次の定期ライブに誘える。週は消費しない。
 // 親密度が高いほど受けてもらいやすい。
@@ -669,6 +691,7 @@ function canInviteGuest(friendId) {
 
 // 受けてもらえる確率。親密度50でおよそ5割、100で9割。
 function guestAcceptChance(intimacy) {
+  if (hasAbility('hitotarashi')) return 0.98;   // 人たらし: ほぼ断られない
   const v = Math.max(0, Math.min(100, intimacy || 0));
   return Math.max(0, Math.min(0.9, 0.5 + (v - GUEST_INVITE_MIN_INTIMACY) * 0.008));
 }
@@ -779,7 +802,8 @@ const EVENT_POOL = [
     fire: () => { state.justDrNasakenaiEvent = true; } },
 
   // --- 体調 ---
-  { key: 'cold', weight: 2, cond: () => state.condition === 'normal', fire: () => triggerColdEvent() },
+  // 不動を持っていると、そもそも風邪をひかないのでこのイベントは起きない
+  { key: 'cold', weight: 2, cond: () => state.condition === 'normal' && !hasAbility('fudou'), fire: () => triggerColdEvent() },
 ];
 
 // 未処理のイベントが残っている間は新しく発生させない
@@ -1266,6 +1290,7 @@ function addIntimacy(friend, amount) {
   if (!friend) return 0;
   let delta = amount;
   if (delta > 0 && hasAbility('charisma')) delta = Math.round(delta * 1.5);
+  if (delta > 0 && hasAbility('hitotarashi')) delta = Math.round(delta * 2);   // 人たらし
   friend.intimacy = (friend.intimacy || 0) + delta;
   return delta;
 }
@@ -1310,6 +1335,7 @@ function applyHealthCost(percent, skipSicknessCheck) {
 }
 
 function checkSickness(healthBefore) {
+  if (hasAbility('fudou')) return;   // 不動: 体調を崩さない
   if (healthBefore > 50) return;
   let severity = (50 - healthBefore) / 50; // 0〜1
   // 柔軟性◯: 体調を崩しにくい / 行動力◯: 好調を保ちやすい
@@ -1792,7 +1818,8 @@ function doPracticeSession(key, useCoupon) {
   applyHealthCost(menu.healthCost);
 
   // 体力が半分以下の状態で練習すると、風邪をひいてしまうことがある
-  if (healthBeforePractice <= 50 && state.condition === 'normal' && Math.random() < COLD_FROM_LOW_HP_PRACTICE_CHANCE) {
+  if (!hasAbility('fudou') && healthBeforePractice <= 50 && state.condition === 'normal'
+      && Math.random() < COLD_FROM_LOW_HP_PRACTICE_CHANCE) {
     state.condition = 'cold';
     addLog('体力が少ない状態で無理をして、風邪をひいてしまった…', 'minus');
   }
@@ -1965,6 +1992,15 @@ function doLive(memberKeys, opts) {
   performanceFinal = Math.round(performanceFinal * (1 + abilityTier('onkan') * 0.04 + abilityTier('rhythm') * 0.04));
   // 会場が大きすぎると緊張する(度胸◯・大舞台◯で緩和、あがり症×で悪化)
   performanceFinal = Math.max(1, Math.min(100, Math.round(performanceFinal * stageNerveMult(venue))));
+  // 屋台骨: きさらが支えてくれるので、大きく崩れることがなくなる。
+  // 良い時をさらに良くするのではなく、下振れを持ち上げるだけにする。
+  if (hasAbility('yataibone')) performanceFinal = Math.max(performanceFinal, Math.round(overall * 0.72));
+  // 絶唱: 会場が大きいほど声が乗る。武道館なら2割増し。
+  if (hasAbility('zesshou')) {
+    const scale = Math.min(0.2, Math.max(0, (venue.capacity - 50) / 10000 * 0.2));
+    performanceFinal = Math.round(performanceFinal * (1 + scale));
+  }
+  performanceFinal = Math.max(1, Math.min(100, performanceFinal));
 
   // 集客: 自分の集客力(=呼べる人数)に、出来・サポート・宣伝を乗せる。
   // 会場のキャパは「上限」であって、キャパが大きいから客が増えるわけではない。
@@ -2020,7 +2056,7 @@ function doLive(memberKeys, opts) {
     guestName: guest ? guest.name : null, guestBand: guest ? guest.bandName : null };
   if (guest) {
     const gf = state.friends.find(x => x.id === guest.id);
-    if (gf) addIntimacy(gf, 5);
+    if (gf) addIntimacy(gf, 8);   // 一緒に出たぶん大きく縮まる
     addLog(`${guest.name}(${guest.bandName})が対バンしてくれた！`, 'plus');
     state.scheduledGuest = null;
   }
@@ -2039,6 +2075,14 @@ function doLive(memberKeys, opts) {
     addLog('りょーぺがフレンドになった！', 'money');
     rp1JustTriggered = true;
   }
+  // 一緒にステージに立ったメンバーとだけ仲良くなる。
+  // 雇わなければ縮まらないので、誰と組むかを選ぶことになる。
+  memberKeys.forEach(k => {
+    const fid = MEMBER_KEY_TO_FRIEND_ID[k];
+    const f = fid && state.friends.find(x => x.id === fid);
+    if (f) addIntimacy(f, LIVE_INTIMACY_GAIN);
+  });
+
   state.lastLiveHadMembers = memberKeys.length > 0;
   state.lastLiveMemberIds = memberKeys.map(k => MEMBER_KEY_TO_FRIEND_ID[k]).filter(Boolean);
   const toughMult = hasAbility('tough') ? 0.8 : 1;   // タフネス◯
@@ -2466,6 +2510,7 @@ window.GameActions = {
   doPromotion, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
   GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
   GUEST_INVITE_MIN_INTIMACY, canInviteGuest, isGuestCandidate, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
+  learnSuperAbilityFrom, canLearnSuperFrom,
   resolveRyoheiRP3, scheduleRyoheiCollab, finalizeRecordingDay, resolveDrNasakenaiChoice, fleeAfterparty,
   resolveTakumaTkm1, resolveTakumaTkm2, acceptTakumaCollab, declineTakumaCollab,
   startNewGameWithNames, claimAllowanceMail,

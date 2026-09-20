@@ -1515,6 +1515,44 @@
   .cd-type-sub { font-size: 10.5px; color: rgba(255,255,255,0.5); margin-top: 2px; }
   .cd-type-need { font-size: 10.5px; color: #E06A6A; margin-top: 3px; }
   .cd-type-arrow { color: rgba(255,255,255,0.3); font-size: 20px; flex: none; }
+  /* ===== 絆の特殊能力(超特殊) ===== */
+  .super-panel {
+    margin: 0 14px 18px; padding: 13px;
+    border-radius: 13px;
+    background: linear-gradient(135deg, rgba(232,196,104,0.16) 0%, rgba(232,196,104,0.04) 100%);
+    border: 1px solid rgba(232,196,104,0.45);
+    box-shadow: 0 2px 14px rgba(232,196,104,0.08);
+  }
+  .super-panel-owned { border-color: rgba(232,196,104,0.8); }
+  .super-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .super-badge {
+    font-size: 9px; font-weight: 900; letter-spacing: 0.08em;
+    padding: 2px 7px; border-radius: 4px;
+    background: linear-gradient(180deg, #E8C468, #C9A44E); color: #241B06;
+  }
+  .super-name { font-size: 17px; font-weight: 900; color: #F5EEDD; }
+  .super-effect { margin: 0 0 10px; font-size: 11.5px; line-height: 1.7; color: rgba(255,255,255,0.72); }
+  .super-costs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .super-cost {
+    font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+    background: rgba(0,0,0,0.3); color: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .super-cost-short { color: #E06A6A; border-color: rgba(224,106,106,0.5); }
+  .super-bar {
+    height: 7px; border-radius: 4px; overflow: hidden; margin-bottom: 6px;
+    background: rgba(0,0,0,0.35);
+  }
+  .super-bar-fill { height: 100%; background: linear-gradient(90deg, #C9A44E, #E8C468); }
+  .super-note { margin: 0; font-size: 10.5px; color: rgba(255,255,255,0.5); }
+  .super-note-short { color: #E06A6A; }
+  .super-note-done { color: #E8C468; font-weight: 800; }
+  .super-learn-btn {
+    width: 100%; border: none; border-radius: 10px; cursor: pointer;
+    padding: 10px; font-size: 13px; font-weight: 900;
+    background: linear-gradient(180deg, #E8C468, #C9A44E); color: #241B06;
+  }
+  .super-learn-btn:active { transform: scale(0.98); }
   /* ===== ランキングの詳細 ===== */
   .rank-row-tap { width: 100%; text-align: left; cursor: pointer; transition: background 0.12s, transform 0.08s; }
   .rank-row-tap:active { transform: translateX(2px); background: rgba(255,255,255,0.08); }
@@ -3034,20 +3072,20 @@
       measurementId: "G-3FCH2Y6VSE",
     };
   </script>
-  <script>window.APP_VERSION = "103";</script>
-  <script src="firebase-service.js?v=103"></script>
-  <script src="icons.js?v=103"></script>
-  <script src="stats-engine.js?v=103"></script>
+  <script>window.APP_VERSION = "104";</script>
+  <script src="firebase-service.js?v=104"></script>
+  <script src="icons.js?v=104"></script>
+  <script src="stats-engine.js?v=104"></script>
   <!-- 効果音(WebAudioで合成。音声ファイルは持たない) -->
-  <script src="sfx.js?v=103"></script>
-  <script src="game.js?v=103"></script>
-  <script src="ui.js?v=103"></script>
+  <script src="sfx.js?v=104"></script>
+  <script src="game.js?v=104"></script>
+  <script src="ui.js?v=104"></script>
   <!-- エンディングだけを確認するためのプレビュー(index.html?ending=1)。
        パラメータが無ければ何もしない。不要になればこの1行とending-preview.jsを消すだけでよい。 -->
-  <script src="keiba.js?v=103"></script>
-  <script src="ending-preview.js?v=103"></script>
+  <script src="keiba.js?v=104"></script>
+  <script src="ending-preview.js?v=104"></script>
   <!-- 選択肢のあるイベントだけを確認するためのプレビュー(index.html?event=1)。
        パラメータが無ければ何もしない。不要になればこの1行とevent-preview.jsを消すだけでよい。 -->
-  <script src="event-preview.js?v=103"></script>
+  <script src="event-preview.js?v=104"></script>
 </body>
 </html>
