@@ -3604,7 +3604,8 @@ function screenSettings() {
           <p class="row-sub">進行状況を消してやり直す(元に戻せません)</p>
         </div>
       </div>
-    </div>`;
+    </div>
+    <p class="settings-version">version ${window.APP_VERSION || '?'}</p>`;
 }
 
 function clearSaveData() {

@@ -1556,6 +1556,10 @@
   .chara-ability-bad {
     color: #E06A6A; background: rgba(224,106,106,0.12); border-color: rgba(224,106,106,0.4);
   }
+  .settings-version {
+    text-align: center; font-size: 10px; letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.25); margin: 18px 0 24px;
+  }
   /* ===== グッズ ===== */
   .goods-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .goods-card {
@@ -3014,19 +3018,20 @@
       measurementId: "G-3FCH2Y6VSE",
     };
   </script>
-  <script src="firebase-service.js"></script>
-  <script src="icons.js"></script>
-  <script src="stats-engine.js"></script>
+  <script>window.APP_VERSION = "100";</script>
+  <script src="firebase-service.js?v=100"></script>
+  <script src="icons.js?v=100"></script>
+  <script src="stats-engine.js?v=100"></script>
   <!-- 効果音(WebAudioで合成。音声ファイルは持たない) -->
-  <script src="sfx.js"></script>
-  <script src="game.js"></script>
-  <script src="ui.js"></script>
+  <script src="sfx.js?v=100"></script>
+  <script src="game.js?v=100"></script>
+  <script src="ui.js?v=100"></script>
   <!-- エンディングだけを確認するためのプレビュー(index.html?ending=1)。
        パラメータが無ければ何もしない。不要になればこの1行とending-preview.jsを消すだけでよい。 -->
-  <script src="keiba.js"></script>
-  <script src="ending-preview.js"></script>
+  <script src="keiba.js?v=100"></script>
+  <script src="ending-preview.js?v=100"></script>
   <!-- 選択肢のあるイベントだけを確認するためのプレビュー(index.html?event=1)。
        パラメータが無ければ何もしない。不要になればこの1行とevent-preview.jsを消すだけでよい。 -->
-  <script src="event-preview.js"></script>
+  <script src="event-preview.js?v=100"></script>
 </body>
 </html>
