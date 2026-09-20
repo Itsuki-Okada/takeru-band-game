@@ -303,8 +303,9 @@ const GOODS = [
   { key: 'keyholder', name: 'キーホルダー', minQty: 20, unitCost: 300, priceMin: 500, priceMax: 900, healthCost: 2, seasonMonths: null },
 ];
 
-// ===== フレンド機能(ダミー) =====
-state.friends = [];
+// ===== フレンド機能 =====
+// 初期フレンド(きさら・いつき)は createInitialFriends() で設定済み。
+// ここで空配列に戻すとメンバーが消えてしまうので、何もしない。
 
 // ===== アクション: フレンド検索・申請 =====
 // (2026-08 以降、フレンド機能はFirebase経由のオンライン専用。ダミー検索は廃止)
@@ -2147,6 +2148,7 @@ function processGoodsSalesDaily() {
 
 // ===== 新規ゲーム開始 =====
 function resetGameState() {
+  state.friends = createInitialFriends();   // きさら・いつきに戻す
   state.money = 10000;
   state.health = 100;
   state.condition = 'normal';

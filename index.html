@@ -1515,6 +1515,114 @@
   .cd-type-sub { font-size: 10.5px; color: rgba(255,255,255,0.5); margin-top: 2px; }
   .cd-type-need { font-size: 10.5px; color: #E06A6A; margin-top: 3px; }
   .cd-type-arrow { color: rgba(255,255,255,0.3); font-size: 20px; flex: none; }
+  /* ===== グッズ ===== */
+  .goods-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .goods-card {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 9px 6px 8px; border-radius: 12px; cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    transition: transform 0.08s, background 0.12s;
+  }
+  .goods-card:active { transform: scale(0.97); background: rgba(255,255,255,0.08); }
+  .goods-card-hot { border-color: rgba(232,196,104,0.55); background: rgba(232,196,104,0.08); }
+  .goods-season {
+    position: absolute; top: -6px; right: -4px; z-index: 2;
+    font-size: 9px; font-weight: 900; padding: 2px 7px; border-radius: 999px;
+    background: linear-gradient(180deg, #E8C468, #C9A44E); color: #241B06;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+  }
+  .goods-season-inline { position: static; margin-left: 8px; display: inline-block; }
+  .goods-card-imgwrap {
+    width: 100%; aspect-ratio: 1/1; border-radius: 9px; overflow: hidden;
+    background: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .goods-card-img { width: 100%; height: 100%; object-fit: contain; }
+  .goods-card-name { font-size: 11.5px; font-weight: 700; color: #F0E6D2; text-align: center; line-height: 1.25; }
+  .goods-card-price { font-size: 10px; color: #E8C468; font-weight: 700; }
+  .goods-card-stock { font-size: 9.5px; color: rgba(255,255,255,0.35); }
+  .goods-card-stock.has-stock { color: #8FBF6A; }
+  .goods-detail-hero {
+    display: flex; align-items: center; gap: 14px;
+    margin: 12px 14px 4px; padding: 12px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+  }
+  .goods-detail-imgwrap {
+    width: 96px; height: 96px; flex: none; border-radius: 12px;
+    background: #fff; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .goods-detail-img { width: 100%; height: 100%; object-fit: contain; }
+  .goods-detail-name { margin: 0; font-size: 17px; font-weight: 900; color: #F0E6D2; }
+  .goods-detail-sub { margin: 4px 0 0; font-size: 11px; color: rgba(255,255,255,0.55); }
+  .goods-detail-sub b { color: #E8C468; font-size: 13px; }
+  /* ===== フレンド ===== */
+  .friend-list { display: flex; flex-direction: column; gap: 8px; }
+  .friend-card {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    padding: 10px; border-radius: 12px; cursor: pointer; text-align: left;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    transition: transform 0.08s, background 0.12s;
+  }
+  .friend-card:active { transform: translateX(3px); background: rgba(255,255,255,0.08); }
+  .friend-card-online { border-left: 3px solid #6EA8E0; }
+  .friend-card-face {
+    width: 52px; height: 52px; flex: none; border-radius: 10px;
+    object-fit: cover; object-position: top center;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .friend-card-noface {
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+  }
+  .friend-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .friend-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .friend-card-name { font-size: 14px; font-weight: 800; color: #F0E6D2; }
+  .friend-card-tier { font-size: 10px; font-weight: 700; flex: none; }
+  .friend-card-sub { font-size: 10.5px; color: rgba(255,255,255,0.45); }
+  .friend-card-bar {
+    display: block; height: 4px; border-radius: 2px; margin-top: 1px;
+    background: rgba(0,0,0,0.4); overflow: hidden;
+  }
+  .friend-card-fill { display: block; height: 100%; border-radius: 2px; }
+  .friend-card-figures { font-size: 10px; color: rgba(255,255,255,0.4); }
+  .friend-card-arrow { color: rgba(255,255,255,0.28); font-size: 20px; flex: none; }
+  .friend-unmet {
+    display: flex; align-items: center; gap: 8px; margin-top: 10px;
+    padding: 9px 11px; border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px dashed rgba(255,255,255,0.12);
+  }
+  .friend-unmet-slot {
+    width: 34px; height: 34px; flex: none; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.25); font-size: 15px; font-weight: 900;
+  }
+  .friend-unmet-note { font-size: 10.5px; color: rgba(255,255,255,0.35); margin-left: 2px; }
+  .friend-badge {
+    display: inline-block; font-size: 10px; font-weight: 900;
+    background: #E06A6A; color: #fff; border-radius: 999px; padding: 1px 7px;
+    margin-left: 4px; letter-spacing: 0;
+  }
+  .friend-request {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px; margin-bottom: 7px; border-radius: 11px;
+    background: rgba(110,168,224,0.1);
+    border: 1px solid rgba(110,168,224,0.35);
+  }
+  .friend-request-text { flex: 1; min-width: 0; }
+  .friend-request-text p { margin: 0; }
+  .friend-req-ok, .friend-req-ng {
+    flex: none; border: none; border-radius: 999px; cursor: pointer;
+    font-size: 11px; font-weight: 800; padding: 5px 12px;
+  }
+  .friend-req-ok { background: #E8C468; color: #1B1508; }
+  .friend-req-ng { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.65); }
   /* ===== 音量スライダー ===== */
   .volume-row { cursor: default; align-items: center; }
   .volume-row .row-text { flex: 1; }

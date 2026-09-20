@@ -513,17 +513,23 @@ function startFirebaseRealtimeSync() {
 
   window.FirebaseSvc.listenToFriends((friends) => {
     const s = window.GameState;
-    s.friends = friends.map(f => ({
+    // ゲーム内のキャラ(きさら・いつき・りょーぺ・たくま)は残したまま、
+    // オンラインで繋がった相手だけを入れ替える。
+    // ここで丸ごと代入すると、最初からいるメンバーが消えてしまう。
+    const npcs = (s.friends || []).filter(f => f.isNpc);
+    const online = friends.map(f => ({
       id: f.uid,
       playerId: f.playerId,
       name: f.playerName || '???',
       bandName: f.bandName || '(名称未設定)',
+      iconUrl: f.iconUrl || '',
       fame: f.fame || 0,
       followers: f.followers || 0,
       level: f.level || 1,
       skills: f.skills || {},
       releases: f.releases || [],
     }));
+    s.friends = [...npcs, ...online];
     render();
   });
 
@@ -2495,17 +2501,21 @@ async function refreshOnlineFriends() {
   if (!(window.FirebaseSvc && window.FirebaseSvc.isConfigured() && window.FirebaseSvc.isReady())) return;
   const friends = await window.FirebaseSvc.fetchFriendsWithProfiles();
   const s = window.GameState;
-  s.friends = friends.map(f => ({
+  // listenToFriendsと同じく、ゲーム内のキャラは残してオンラインぶんだけ差し替える
+  const npcs = (s.friends || []).filter(f => f.isNpc);
+  const online = friends.map(f => ({
     id: f.uid,
     playerId: f.playerId,
     name: f.playerName || '???',
     bandName: f.bandName || '(名称未設定)',
+    iconUrl: f.iconUrl || '',
     fame: f.fame || 0,
     followers: f.followers || 0,
     level: f.level || 1,
     skills: f.skills || {},
     releases: f.releases || [],
   }));
+  s.friends = [...npcs, ...online];
   render();
 }
 
@@ -2545,40 +2555,103 @@ function screenFriend() {
   const s = window.GameState;
   const online = window.FirebaseSvc && window.FirebaseSvc.isConfigured() && window.FirebaseSvc.isReady();
 
-  // 全員(きさら・いつき・りょーぺ等)を区分けせず同じ形の一覧として表示する
-  const rows = s.friends.map(f => {
-    const thumbSrc = (f.memberKey && window.MEMBER_CHARS && window.MEMBER_CHARS[f.memberKey]) ? window.MEMBER_CHARS[f.memberKey].idle : null;
-    return `<div class="row" onclick="friendDetailId='${f.id}';render();">
-      ${thumbSrc ? thumbImg(thumbSrc) : '<div class="thumb">👤</div>'}
-      <div class="row-text">
-        <p class="row-title">${f.name} <span class="row-sub">(${f.bandName || f.part || ''})</span></p>
-        <p class="row-sub">${f.intimacy !== undefined ? `親密度${f.intimacy} / ` : ''}知名度${f.fame.toLocaleString()} / フォロワー${f.followers.toLocaleString()}</p>
-      </div>
-    </div>`;
+  // バンド仲間(ゲーム内キャラ)と、オンラインで繋がったプレイヤーを分けて並べる
+  const npcFriends = s.friends.filter(f => f.isNpc);
+  const onlineFriends = s.friends.filter(f => !f.isNpc);
+
+  // 出会っていないキャラは「？」のシルエット枠として見せる。
+  // 何人いるのかが分かるので、出会う楽しみが残る。
+  const ALL_NPC_KEYS = ['kisara', 'itsuki', 'ryohei', 'takuma'];
+  const metKeys = npcFriends.map(f => f.memberKey || f.id);
+  const unmetCount = ALL_NPC_KEYS.filter(k => metKeys.indexOf(k) < 0).length;
+
+  const intimacyTier = v => {
+    if (v >= 80) return { label: '親友', color: '#E8C468' };
+    if (v >= 50) return { label: '仲がいい', color: '#8FBF6A' };
+    if (v >= 20) return { label: '顔なじみ', color: '#6EA8E0' };
+    return { label: '知り合い', color: 'rgba(255,255,255,0.45)' };
+  };
+
+  const npcCards = npcFriends.map(f => {
+    const img = (f.memberKey && window.MEMBER_CHARS && window.MEMBER_CHARS[f.memberKey])
+      ? window.MEMBER_CHARS[f.memberKey].idle : null;
+    const iv = f.intimacy || 0;
+    const tier = intimacyTier(iv);
+    return `
+      <button class="friend-card" onclick="friendDetailId='${f.id}';render();">
+        ${img ? `<img src="${img}" class="friend-card-face" loading="lazy" decoding="async" />`
+              : '<span class="friend-card-face friend-card-noface">👤</span>'}
+        <span class="friend-card-body">
+          <span class="friend-card-top">
+            <span class="friend-card-name">${f.name}</span>
+            <span class="friend-card-tier" style="color:${tier.color};">${tier.label}</span>
+          </span>
+          <span class="friend-card-sub">${f.bandName || f.part || ''}</span>
+          <span class="friend-card-bar"><span class="friend-card-fill" style="width:${Math.min(100, iv)}%;background:${tier.color};"></span></span>
+          <span class="friend-card-figures">親密度 ${iv} ・ 知名度 ${(f.fame || 0).toLocaleString()}</span>
+        </span>
+        <span class="friend-card-arrow">›</span>
+      </button>`;
   }).join('');
 
-  const inboxHtml = online ? `
-    <p class="section-label">受信したフレンド申請</p>
-    ${firebaseInboxRequests === null
-      ? '<p class="empty">読み込み中...</p>'
-      : firebaseInboxRequests.length === 0
-        ? '<p class="empty">保留中の申請はありません</p>'
-        : `<div class="list">${firebaseInboxRequests.map(r => `
-            <div class="row" style="cursor:default;">
-              <div class="thumb">🧑‍🤝‍🧑</div>
-              <div class="row-text">
-                <p class="row-title">${r.fromPlayerName}(${r.fromBandName})</p>
-                <p class="row-sub">ID: ${r.fromPlayerId}</p>
-              </div>
-              <button class="row-btn" onclick="acceptOnlineFriendRequest('${r.id}','${r.fromUid}','${r.fromPlayerId}','${r.fromPlayerName}','${r.fromBandName}')">承認</button>
-              <button class="row-btn" onclick="declineOnlineFriendRequest('${r.id}')">見送る</button>
-            </div>`).join('')}</div>`}
-  ` : '';
+  const unmetHtml = unmetCount > 0
+    ? `<div class="friend-unmet">${Array.from({ length: unmetCount }).map(() => `
+        <span class="friend-unmet-slot">?</span>`).join('')}
+        <span class="friend-unmet-note">活動を続けると出会えます</span>
+      </div>`
+    : '';
 
-  return sectionTitle('フレンド') +
-    inboxHtml +
-    `<p class="section-label">フレンド一覧(${s.friends.length}人)</p>
-    <div class="list">${rows}</div>` + logBox();
+  const onlineCards = onlineFriends.map(f => `
+    <button class="friend-card friend-card-online" onclick="friendDetailId='${f.id}';render();">
+      <img src="${f.iconUrl || defaultIconUrl()}" class="friend-card-face" loading="lazy" decoding="async" />
+      <span class="friend-card-body">
+        <span class="friend-card-top">
+          <span class="friend-card-name">${f.name}</span>
+          <span class="friend-card-tier" style="color:#6EA8E0;">プレイヤー</span>
+        </span>
+        <span class="friend-card-sub">${f.bandName || ''}</span>
+        <span class="friend-card-figures">知名度 ${(f.fame || 0).toLocaleString()} ・ フォロワー ${(f.followers || 0).toLocaleString()}</span>
+      </span>
+      <span class="friend-card-arrow">›</span>
+    </button>`).join('');
+
+  const inboxHtml = (online && firebaseInboxRequests && firebaseInboxRequests.length > 0) ? `
+    <div class="craft-block">
+      <p class="craft-block-label">フレンド申請 <span class="friend-badge">${firebaseInboxRequests.length}</span></p>
+      ${firebaseInboxRequests.map(r => `
+        <div class="friend-request">
+          <div class="friend-request-text">
+            <p class="friend-card-name">${r.fromPlayerName}</p>
+            <p class="friend-card-sub">${r.fromBandName} / ID ${r.fromPlayerId}</p>
+          </div>
+          <button class="friend-req-ok" onclick="acceptOnlineFriendRequest('${r.id}','${r.fromUid}','${r.fromPlayerId}','${r.fromPlayerName}','${r.fromBandName}')">承認</button>
+          <button class="friend-req-ng" onclick="declineOnlineFriendRequest('${r.id}')">見送る</button>
+        </div>`).join('')}
+    </div>` : '';
+
+  return `
+    <div class="craft-hero" style="background-image:url('${window.VENUE_OUTSIDE_BG || window.HOME_BG}')">
+      <div class="craft-hero-shade"></div>
+      ${npcFriends.length > 0 && window.MEMBER_CHARS && window.MEMBER_CHARS[npcFriends[0].memberKey]
+        ? `<img src="${window.MEMBER_CHARS[npcFriends[0].memberKey].idle}" class="craft-hero-char" />` : ''}
+      <div class="craft-hero-text">
+        <p class="craft-hero-label">FRIENDS</p>
+        <p class="craft-hero-title">フレンド</p>
+        <p class="craft-hero-sub">仲良くなると対バンに誘ってもらえます</p>
+      </div>
+    </div>
+    ${inboxHtml}
+    <div class="craft-block">
+      <p class="craft-block-label">バンド仲間 <span class="craft-block-hint">${npcFriends.length}人</span></p>
+      <div class="friend-list">${npcCards}</div>
+      ${unmetHtml}
+    </div>
+    ${onlineFriends.length > 0 ? `
+      <div class="craft-block">
+        <p class="craft-block-label">オンラインのフレンド <span class="craft-block-hint">${onlineFriends.length}人</span></p>
+        <div class="friend-list">${onlineCards}</div>
+      </div>` : ''}
+  ` + logBox();
 }
 
 function screenFriendDetail(friend) {
@@ -3529,18 +3602,40 @@ let goodsFlowState = { type: null, quantity: null, price: null };
 function screenGoods() {
   if (!goodsFlowState.type) {
     const s = window.GameState;
+    const month = s.month;
+    const totalStock = (s.goodsInventory || []).reduce((a, inv) => a + inv.remaining, 0);
     const cards = window.GameData.GOODS.map(g => {
       const stock = (s.goodsInventory || []).filter(inv => inv.key === g.key).reduce((a, inv) => a + inv.remaining, 0);
+      // 旬の時期は売れやすいので、その月に入っているものは目立たせる
+      const inSeason = g.seasonMonths && g.seasonMonths.indexOf(month) >= 0;
       return `
-      <div class="job-card" onclick="goodsFlowState={type:'${g.key}',quantity:${g.minQty},price:${g.priceMin}};render();">
-        <img src="${window.GOODS_THUMB[g.key]}" class="job-card-img" loading="lazy" decoding="async" style="background:#fff;object-fit:contain;" />
-        <p class="job-card-name">${g.name}</p>
-        <p class="job-card-detail">在庫 ${stock.toLocaleString()}個</p>
-        <p class="job-card-wage">¥${g.priceMin.toLocaleString()}〜¥${g.priceMax.toLocaleString()}</p>
-      </div>`;
+      <button class="goods-card ${inSeason ? 'goods-card-hot' : ''}"
+        onclick="goodsFlowState={type:'${g.key}',quantity:${g.minQty},price:${g.priceMin}};render();">
+        ${inSeason ? '<span class="goods-season">旬</span>' : ''}
+        <span class="goods-card-imgwrap">
+          <img src="${window.GOODS_THUMB[g.key]}" class="goods-card-img" loading="lazy" decoding="async" />
+        </span>
+        <span class="goods-card-name">${g.name}</span>
+        <span class="goods-card-price">¥${g.priceMin.toLocaleString()}〜</span>
+        <span class="goods-card-stock ${stock > 0 ? 'has-stock' : ''}">在庫 ${stock.toLocaleString()}</span>
+      </button>`;
     }).join('');
-    return sectionTitle('グッズを作る') + feverBanner() +
-      `<div class="job-grid">${cards}</div>` + logBox();
+    return `
+      <div class="craft-hero" style="background-image:url('${window.HOME_BG}')">
+        <div class="craft-hero-shade"></div>
+        <img src="${window.TAKERU_HAPPY_IMG || window.RECORDING_CHARS.guitar_idle}" class="craft-hero-char" />
+        <div class="craft-hero-text">
+          <p class="craft-hero-label">GOODS</p>
+          <p class="craft-hero-title">グッズを作る</p>
+          <p class="craft-hero-sub">ライブの物販で売れます${totalStock > 0 ? ` / 在庫 ${totalStock.toLocaleString()}個` : ''}</p>
+        </div>
+      </div>
+      ${feverBanner()}
+      <div class="craft-block">
+        <p class="craft-block-label">何を作る？ <span class="craft-block-hint">「旬」は今の季節に売れやすい商品です</span></p>
+        <div class="goods-grid">${cards}</div>
+      </div>
+    ` + logBox();
   }
 
   const g = window.GameData.GOODS.find(x => x.key === goodsFlowState.type);
@@ -3550,12 +3645,20 @@ function screenGoods() {
   const currentStock = (window.GameState.goodsInventory || []).filter(inv => inv.key === g.key).reduce((a, inv) => a + inv.remaining, 0);
   const seasonNote = g.seasonMonths ? `<p class="row-sub">旬な時期: ${g.seasonMonths.map(m => m + '月').join('/')}(売れやすい)</p>` : '';
 
+  const inSeason = g.seasonMonths && g.seasonMonths.indexOf(window.GameState.month) >= 0;
   return `<div class="header"><button class="back" onclick="goodsFlowState={type:null,quantity:null,price:null};render();">←</button><span>${g.name}</span></div>
-    <div style="padding:12px 14px 0;text-align:center;">
-      <img src="${window.GOODS_THUMB[g.key]}" style="width:140px;height:140px;object-fit:contain;background:#fff;border-radius:12px;border:1px solid #2A2A32;" />
+    <div class="goods-detail-hero">
+      <div class="goods-detail-imgwrap">
+        <img src="${window.GOODS_THUMB[g.key]}" class="goods-detail-img" />
+      </div>
+      <div class="goods-detail-info">
+        <p class="goods-detail-name">${g.name}${inSeason ? '<span class="goods-season goods-season-inline">旬</span>' : ''}</p>
+        <p class="goods-detail-sub">原価 ¥${g.unitCost.toLocaleString()}/個 ・ 体力-${g.healthCost}%</p>
+        <p class="goods-detail-sub">現在の在庫 <b>${currentStock.toLocaleString()}</b>個</p>
+      </div>
     </div>
     <div style="padding:12px 14px 0;">
-      <p class="section-label" style="padding:0 0 4px;">制作数: ${qty.toLocaleString()}個(最低${g.minQty}個) / 現在の在庫 ${currentStock.toLocaleString()}個</p>
+      <p class="section-label" style="padding:0 0 4px;">制作数: ${qty.toLocaleString()}個(最低${g.minQty}個)</p>
       <input id="goodsQtyInput" type="number" value="${qty}" min="${g.minQty}" step="1" class="text-input" style="width:100%;text-align:center;" oninput="setGoodsQty(this.value)" />
       <div class="grid3" style="margin-top:8px;">
         <button class="genre-btn" onclick="adjustGoodsQty(1)">+1</button>
