@@ -72,6 +72,8 @@ const state = {
   afterpartyState: null,
   justLiveDayArrived: null,
   liveDayAnnounced: false,
+  peakFame: 0,               // これまでの最高知名度(減衰の下限に使う)
+  peakFollowers: 0,
   scheduledGuest: null,      // 次の定期ライブに出てもらうフレンド
   justLiveCancelled: null,   // 熱で中止になった時の通知
   justGuestReply: null,      // 対バンに誘った返事
@@ -119,6 +121,16 @@ const JOBS = [
   { key: 'haitatsu', name: '配達', wage: 1200, healthCost: 15, expGain: { ski: [5, 10], men: [5, 10] } },
   { key: 'koujou', name: '工場', wage: 1400, healthCost: 20, expGain: { str: [5, 10], ski: [5, 10], men: [5, 10] } },
 ];
+
+// アルバイトは熟練度(0〜100)が上がるほど時給と経験点が伸びる。
+// 序盤で終わりにならず、通い続けた職場は終盤でも選ぶ価値が残る。
+let JOB_MASTERY_WAGE_BONUS = 0.8;   // 熟練度MAXで時給1.8倍
+let JOB_MASTERY_EXP_BONUS = 1.2;    // 熟練度MAXで経験点2.2倍
+
+function jobMasteryMult(jobKey, bonus) {
+  const m = (state.jobMastery && state.jobMastery[jobKey]) || 0;
+  return 1 + (m / 100) * bonus;
+}
 
 // 熟練度MAX(100)でアルバイトごとの特殊能力(StatsEngine.ABILITIES の
 // unlockType:'mastery' 側)が自動習得される想定。
@@ -362,6 +374,11 @@ let EXTRA_LIVE_HEALTH_MULT = 1.0;  // 追加ライブの体力消費倍率
 // (週あたりの獲得量 ÷ 減衰率 が、そのプレイヤーの到達水準のおよその目安)
 let FAME_DECAY = 0.030;
 let FOLLOWER_DECAY = 0.022;   // フォロワーは知名度より離れにくい
+// 一度ついたファンが全員離れるわけではない。
+// これまでの最高値のうち、この割合までは減らずに残る(=定着した層)。
+// 終盤に「維持するためだけにライブを打ち続ける」状態にならないようにするための下限。
+let FAME_FLOOR_RATIO = 0.60;
+let FOLLOWER_FLOOR_RATIO = 0.70;
 
 // ===== 特殊能力の判定 =====
 // abilityTier(): 0=未所持 / 1=◯ / 2=◎ / 3=金(絶対音感など)
@@ -1397,11 +1414,20 @@ function advanceWeek(opts) {
   state.turn += 1;
 
   // 人気の自然減衰(1週ぶん)。根強い人気◯で半分、不人気×で1.5倍。
+  // 減るのは「定着した層」を超えたぶんだけ。積み上げた実績は残る。
   let decayMult = 1;
   if (hasAbility('loyal')) decayMult *= 0.5;
   if (hasAbility('unpopular')) decayMult *= 1.5;
-  if (state.fame > 0) state.fame = Math.max(0, state.fame * (1 - FAME_DECAY * decayMult));
-  if (state.followers > 0) state.followers = Math.max(0, state.followers * (1 - FOLLOWER_DECAY * decayMult));
+  state.peakFame = Math.max(state.peakFame || 0, state.fame);
+  state.peakFollowers = Math.max(state.peakFollowers || 0, state.followers);
+  const fameFloor = state.peakFame * FAME_FLOOR_RATIO;
+  const followerFloor = state.peakFollowers * FOLLOWER_FLOOR_RATIO;
+  if (state.fame > fameFloor) {
+    state.fame = Math.max(fameFloor, state.fame - (state.fame - fameFloor) * FAME_DECAY * decayMult);
+  }
+  if (state.followers > followerFloor) {
+    state.followers = Math.max(followerFloor, state.followers - (state.followers - followerFloor) * FOLLOWER_DECAY * decayMult);
+  }
 
   // 浪費癖×: 毎週わずかにお金が減る
   if (hasAbility('spender') && state.money > 0) {
@@ -1587,8 +1613,8 @@ let INDIE_OVERALL_REQUIRED = 50;   // Dランク相当
 // 条件を満たしても、すぐ声がかかるわけではない。満たしている間だけ毎回抽選する。
 // 1年半で約20%、2年で約40%が到達するように、実際に2年ぶんを回して決めた数値。
 let MAJOR_AUDIENCE_REQUIRED = 700;      // 1本のライブで呼べた最高動員
-let MAJOR_FAME_REQUIRED = 34000;
-let MAJOR_FOLLOWERS_REQUIRED = 27200;
+let MAJOR_FAME_REQUIRED = 60000;
+let MAJOR_FOLLOWERS_REQUIRED = 42000;
 let MAJOR_OVERALL_REQUIRED = 74;        // Bランク相当
 let MAJOR_OFFER_CHANCE = 0.40;        // 条件を満たせば数週以内に必ず声がかかる(=抽選ではなく条件で決まる)
 
@@ -1740,16 +1766,15 @@ function doJob(key) {
   const wouldBeSentHome = state.condition === 'cold' || state.condition === 'fever' || state.health < 30;
   const sentHomeEarly = wouldBeSentHome && !(hasAbility('patience') && Math.random() < 0.6);
   const hours = sentHomeEarly ? 4 : 8;
-  // 器用◯: 時給が1.25倍
-  const wageMult = hasAbility('dexterity') ? 1.25 : 1;
+  // 器用◯: 時給が1.25倍。さらに熟練度ぶんの上乗せがある。
+  const wageMult = (hasAbility('dexterity') ? 1.25 : 1) * jobMasteryMult(key, JOB_MASTERY_WAGE_BONUS);
   const wage = Math.round(job.wage * hours * wageMult);
   addMoney(wage);
   addLog(`${job.name}で ${yen(wage)} 稼いだ${sentHomeEarly ? `(${hours}時間で早退)` : ''}`, 'plus');
-  // 器用◯: バイトで得られる経験点も増える
+  // 器用◯と熟練度で、得られる経験点も増える
+  const expMult = (hasAbility('dexterity') ? 1.25 : 1) * jobMasteryMult(key, JOB_MASTERY_EXP_BONUS);
   const jobExp = rollExpFromRanges(job.expGain);
-  if (hasAbility('dexterity')) {
-    Object.keys(jobExp).forEach(c => { jobExp[c] = Math.round(jobExp[c] * 1.25); });
-  }
+  Object.keys(jobExp).forEach(c => { jobExp[c] = Math.max(1, Math.round(jobExp[c] * expMult)); });
   grantExp(jobExp);
   gainJobMastery(key, 8); // 8回前後(体調やイベントで前後)でMAXになる目安
   applyHealthCost(job.healthCost);
@@ -2372,6 +2397,8 @@ function resetGameState() {
   state.afterpartyState = null;
   state.justLiveDayArrived = null;
   state.liveDayAnnounced = false;
+  state.peakFame = 0;
+  state.peakFollowers = 0;
   state.scheduledGuest = null;
   state.justLiveCancelled = null;
   state.justGuestReply = null;
@@ -2517,7 +2544,7 @@ window.GameActions = {
   saveGame, loadGame, hasSaveData, deleteSaveData, ensureInitialFriends,
 };
 window.GameData = {
-  JOBS, PRACTICE_MENUS, GENRES, CD_TYPES, STUDIOS, VENUES, GOODS, MEMBERS, PROMOTIONS, NPC_MEMBERS,
+  JOBS, jobMasteryMult, JOB_MASTERY_WAGE_BONUS, JOB_MASTERY_EXP_BONUS, PRACTICE_MENUS, GENRES, CD_TYPES, STUDIOS, VENUES, GOODS, MEMBERS, PROMOTIONS, NPC_MEMBERS,
   INDIE_LABELS, INDIE_OFFER_THRESHOLD, indieLabelDef, recordingCostMult,
   INDIE_OVERALL_REQUIRED, meetsIndieRequirements,
   MAJOR_AUDIENCE_REQUIRED, MAJOR_FAME_REQUIRED, MAJOR_FOLLOWERS_REQUIRED, MAJOR_OVERALL_REQUIRED, meetsMajorRequirements,

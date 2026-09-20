@@ -1963,7 +1963,7 @@ const VENUE_STAGE_BOTTOM = {
   small: '9%',
   mid: '12%',
   zepp: '18%',
-  hall: '20%',
+  hall: '15%',
   budokan: '22%',
 };
 const LIVE_CHAR_FRAMES = {
