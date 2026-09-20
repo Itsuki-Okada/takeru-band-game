@@ -2730,17 +2730,20 @@ function screenFriend() {
     return { label: '知り合い', color: 'rgba(255,255,255,0.45)' };
   };
 
-  const npcCards = npcFriends.map(f => {
+  const renderNpcCard = f => {
     const img = (f.memberKey && window.MEMBER_CHARS && window.MEMBER_CHARS[f.memberKey])
       ? window.MEMBER_CHARS[f.memberKey].idle : null;
     const iv = f.intimacy || 0;
     const tier = intimacyTier(iv);
+    // 自分のバンドのメンバーは対バンの相手にならないので、誘う欄自体を出さない
+    const isCandidate = GameActions.isGuestCandidate(f);
     const canInvite = GameActions.canInviteGuest(f.id);
     const inviteReason = s.scheduledGuest
       ? `${s.scheduledGuest.name}が出演予定`
-      : (iv < GameActions.GUEST_INVITE_MIN_INTIMACY ? `親密度${GameActions.GUEST_INVITE_MIN_INTIMACY}で誘える` : '');
+      : (s.condition === 'fever' ? '熱が下がってから'
+        : (iv < GameActions.GUEST_INVITE_MIN_INTIMACY ? `親密度${GameActions.GUEST_INVITE_MIN_INTIMACY}で誘える` : ''));
     return `
-      <div class="friend-card-wrap">
+      <div class="friend-card-wrap ${isCandidate ? '' : 'friend-card-solo'}">
         <button class="friend-card" onclick="friendDetailId='${f.id}';render();">
           ${img ? `<img src="${img}" class="friend-card-face" loading="lazy" decoding="async" />`
                 : '<span class="friend-card-face friend-card-noface">👤</span>'}
@@ -2755,13 +2758,18 @@ function screenFriend() {
           </span>
           <span class="friend-card-arrow">›</span>
         </button>
+        ${isCandidate ? `
         <div class="friend-invite-row">
           ${canInvite
             ? `<button class="friend-invite-btn" onclick="inviteGuestScene('${f.id}')">対バンに誘う</button>`
             : `<span class="friend-invite-note">${inviteReason}</span>`}
-        </div>
+        </div>` : ''}
       </div>`;
-  }).join('');
+  };
+  const bandMembers = npcFriends.filter(f => !GameActions.isGuestCandidate(f));
+  const otherBands = npcFriends.filter(f => GameActions.isGuestCandidate(f));
+  const memberCards = bandMembers.map(renderNpcCard).join('');
+  const bandCards = otherBands.map(renderNpcCard).join('');
 
   const unmetHtml = unmetCount > 0
     ? `<div class="friend-unmet">${Array.from({ length: unmetCount }).map(() => `
@@ -2816,8 +2824,13 @@ function screenFriend() {
           s.scheduledGuest ? ` / ${s.scheduledGuest.name}が出演` : ' / 対バン相手なし'}</span></p>
     </div>
     <div class="craft-block">
-      <p class="craft-block-label">バンド仲間 <span class="craft-block-hint">${npcFriends.length}人</span></p>
-      <div class="friend-list">${npcCards}</div>
+      <p class="craft-block-label">バンドメンバー <span class="craft-block-hint">${bandMembers.length}人</span></p>
+      <div class="friend-list">${memberCards}</div>
+    </div>
+    <div class="craft-block">
+      <p class="craft-block-label">他のバンドマン
+        <span class="craft-block-hint">親密度${GameActions.GUEST_INVITE_MIN_INTIMACY}以上で対バンに誘えます</span></p>
+      <div class="friend-list">${bandCards || '<p class="roster-empty">まだ出会っていません</p>'}</div>
       ${unmetHtml}
     </div>
     ${onlineFriends.length > 0 ? `

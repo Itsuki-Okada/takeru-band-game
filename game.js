@@ -646,11 +646,20 @@ function checkTakumaMeeting() {
 // 親密度が高いほど受けてもらいやすい。
 const GUEST_INVITE_MIN_INTIMACY = 50;
 
+// 自分のバンドのメンバー(きさら・いつき)は対バンの相手にはならない。
+// 誘えるのは、自分のバンドを持っているフレンド(りょーぺ・たくま)だけ。
+function isGuestCandidate(friend) {
+  if (!friend || !friend.isNpc) return false;
+  const npc = NPC_MEMBERS[friend.memberKey || friend.id];
+  const band = (friend.bandName || (npc && npc.bandName) || '').trim();
+  return band.length > 0;
+}
+
 function canInviteGuest(friendId) {
   if (state.scheduledGuest) return false;                 // 1回のライブにつき1組
   if (state.condition === 'fever') return false;
   const f = state.friends.find(x => x.id === friendId);
-  if (!f || !f.isNpc) return false;
+  if (!isGuestCandidate(f)) return false;
   if ((f.intimacy || 0) < GUEST_INVITE_MIN_INTIMACY) return false;
   return true;
 }
@@ -2450,7 +2459,7 @@ window.GameActions = {
   spendExtraWeek,
   doPromotion, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
   GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
-  GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
+  GUEST_INVITE_MIN_INTIMACY, canInviteGuest, isGuestCandidate, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
   resolveRyoheiRP3, scheduleRyoheiCollab, finalizeRecordingDay, resolveDrNasakenaiChoice, fleeAfterparty,
   resolveTakumaTkm1, resolveTakumaTkm2, acceptTakumaCollab, declineTakumaCollab,
   startNewGameWithNames, claimAllowanceMail,
