@@ -282,9 +282,9 @@ function calcTicketsReserved(venue) {
 
 // ===== 宣伝(ライブ前、週を消費せず週1回まで) =====
 const PROMOTIONS = [
-  { key: 'stream', name: '配信を行う', cost: 2000, audienceMin: 1, audienceMax: 3, fameGain: 30, followerGain: 20 },
-  { key: 'flyer', name: 'チラシを配る', cost: 5000, audienceMin: 2, audienceMax: 5, fameGain: 60, followerGain: 35 },
-  { key: 'ad', name: 'SNS広告', cost: 10000, audienceMin: 4, audienceMax: 7, fameGain: 100, followerGain: 60 },
+  { key: 'stream', name: '配信を行う', cost: 2000, audienceMin: 2, audienceMax: 5, fameGain: 25, followerGain: 20 },
+  { key: 'flyer', name: 'チラシを配る', cost: 5000, audienceMin: 4, audienceMax: 9, fameGain: 45, followerGain: 35 },
+  { key: 'ad', name: 'SNS広告', cost: 10000, audienceMin: 8, audienceMax: 14, fameGain: 75, followerGain: 60 },
 ];
 
 const PROMO_COOLDOWN_TURNS = 2; // 宣伝は2週間に1回まで
@@ -343,7 +343,7 @@ const FOLLOWER_FROM_LIVE = 0.8;
 const FOLLOWER_FROM_CD = 0.9;
 // 選択肢イベントは1回のサクセス中に何度でも起きる(平均で13回ほど)。
 // ライブやCDと同じ倍率にすると知名度・フォロワーが伸びすぎるので、こちらは小さく抑える。
-let EVENT_FAME_GROWTH = 0.5;
+let EVENT_FAME_GROWTH = 1.5;
 
 // ===== ライブの集客モデル(調整パラメータ) =====
 // 「集客力」= 会場に関係なく自分が呼べる客の数。これを会場のキャパと比べて充足率が決まる。
@@ -359,7 +359,7 @@ let DRAW_OVERALL = 0.5;        // 総合力→集客力(序盤の下支え)
 let LIVE_FATIGUE_BASE = 0.35;      // 翌週にもう1本打った時の倍率
 let LIVE_FATIGUE_RECOVER = 0.16;   // 1週空けるごとの回復量(1.0で頭打ち)
 // 知名度の入り方。満員に近いほど跳ねる。
-let FAME_PER_HEAD = 0.45;      // 客1人あたりの知名度(×FAME_GROWTH)
+let FAME_PER_HEAD = 0.18;      // 客1人あたりの知名度(×FAME_GROWTH)。動員数に見合う量にする
 let FILL_BONUS_MIN = 0.45;     // 充足率0%のときの倍率
 let FILL_BONUS_RANGE = 1.15;   // 充足率100%で FILL_BONUS_MIN + これ 倍になる
 let FLOP_FILL = 0.2;           // これ未満の充足率は「ガラガラ」扱い
@@ -1604,7 +1604,7 @@ function finalizeSongProduction() {
 // 知名度またはフォロワーがこの値を超えると、ロケットミュージックエンターテイメントの
 // 堀 良音からオファーが来る。3つのレーベルから1つを選ぶと、それぞれ違う特典が付く。
 // ふつうに遊んで半年〜1年(24〜48週)で届く値。2年ぶんを実際に回して決めている。
-let INDIE_OFFER_THRESHOLD = 2500;
+let INDIE_OFFER_THRESHOLD = 2000;
 let INDIE_OVERALL_REQUIRED = 50;   // Dランク相当
 
 // ===== メジャーデビューの条件 =====
@@ -1613,8 +1613,8 @@ let INDIE_OVERALL_REQUIRED = 50;   // Dランク相当
 // 条件を満たしても、すぐ声がかかるわけではない。満たしている間だけ毎回抽選する。
 // 1年半で約20%、2年で約40%が到達するように、実際に2年ぶんを回して決めた数値。
 let MAJOR_AUDIENCE_REQUIRED = 700;      // 1本のライブで呼べた最高動員
-let MAJOR_FAME_REQUIRED = 60000;
-let MAJOR_FOLLOWERS_REQUIRED = 42000;
+let MAJOR_FAME_REQUIRED = 26000;
+let MAJOR_FOLLOWERS_REQUIRED = 18000;
 let MAJOR_OVERALL_REQUIRED = 74;        // Bランク相当
 let MAJOR_OFFER_CHANCE = 0.40;        // 条件を満たせば数週以内に必ず声がかかる(=抽選ではなく条件で決まる)
 
