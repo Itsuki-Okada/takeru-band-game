@@ -1646,6 +1646,21 @@ const RECORDING_PHASE_CONFIG = {
 };
 const RECORDING_MEMBER_ORDER = ['drums', 'bass'];
 
+// パートごとに「その担当キャラのライブ絵」を使う。
+// 叩いているのはいつきなので、ドラムの収録中はいつきのライブ画像を出す。
+const RECORDING_PHASE_MEMBER = { drums: 'itsuki' };
+
+// 収録中に出す画像。担当キャラのライブ絵があればそれを、なければ従来の絵を使う。
+function recordingPhaseImg(phaseKey, frame) {
+  const memberKey = RECORDING_PHASE_MEMBER[phaseKey];
+  const chars = memberKey && window.MEMBER_CHARS && window.MEMBER_CHARS[memberKey];
+  if (chars && Array.isArray(chars.live) && chars.live.length > 0) {
+    return chars.live[frame % chars.live.length];
+  }
+  const config = RECORDING_PHASE_CONFIG[phaseKey];
+  return window.RECORDING_CHARS[config.frames[frame]];
+}
+
 let recordingSessionState = { active: false, phases: [], phaseIndex: 0, frame: 0, pendingParams: null };
 let recordingFrameTimer = null;
 let recordingPhaseTimer = null;
@@ -1788,7 +1803,6 @@ function screenRecordingSession() {
   const rs = recordingSessionState;
   const phaseKey = rs.phases[rs.phaseIndex];
   const config = RECORDING_PHASE_CONFIG[phaseKey];
-  const charKey = config.frames[rs.frame];
   const bg = window.STUDIO_BG[recordingState.studio];
   const charHeight = RECORDING_PART_HEIGHT[phaseKey] || 140;
   const producerHtml = recordingState.producer
@@ -1799,7 +1813,7 @@ function screenRecordingSession() {
     <div class="recording-session-bg" style="background-image:url('${bg}')">
       ${bgHud()}
       ${producerHtml}
-      <img id="recordingCharImg" src="${window.RECORDING_CHARS[charKey]}" class="recording-char-img" style="height:${charHeight}px;" />
+      <img id="recordingCharImg" src="${recordingPhaseImg(phaseKey, rs.frame)}" class="recording-char-img" style="height:${charHeight}px;" />
     </div>
     <div class="progress-card" style="margin:10px 14px;">
       <p class="progress-title">${config.label}</p>
@@ -1874,8 +1888,7 @@ function runRecordingPhase() {
     const img = document.getElementById('recordingCharImg');
     if (img) {
       const phaseKey = recordingSessionState.phases[recordingSessionState.phaseIndex];
-      const config = RECORDING_PHASE_CONFIG[phaseKey];
-      img.src = window.RECORDING_CHARS[config.frames[recordingSessionState.frame]];
+      img.src = recordingPhaseImg(phaseKey, recordingSessionState.frame);
     }
   }, 450);
 
