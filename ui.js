@@ -39,7 +39,11 @@ function loadVolumeSettings() {
 
 function applyVolumeSettings() {
   const audioEl = document.getElementById('bgmPlayer');
-  if (audioEl) audioEl.volume = currentBgmVolume();
+  const vol = currentBgmVolume();
+  // WebAudioに繋げていればそちらで音量を決める(iOSでも効く)。
+  // 繋げられていない場合だけ、従来どおり要素のvolumeを使う。
+  const viaGain = window.Sfx && window.Sfx.setBgmVolume ? window.Sfx.setBgmVolume(vol) : false;
+  if (audioEl && !viaGain) audioEl.volume = vol;
   if (window.Sfx) window.Sfx.setVolume(SFX_BASE_VOLUME * (volumeSettings.sfx / 100));
 }
 
@@ -173,7 +177,9 @@ function updateBGM(tab) {
     audioEl.src = window.BGM[key];
     audioEl.loop = true;
   }
-  audioEl.volume = Math.min(1, BGM_VOLUME * (BGM_GAIN[key] || 1) * (volumeSettings.bgm / 100));
+  const vol = Math.min(1, BGM_VOLUME * (BGM_GAIN[key] || 1) * (volumeSettings.bgm / 100));
+  const viaGain = window.Sfx && window.Sfx.setBgmVolume ? window.Sfx.setBgmVolume(vol) : false;
+  if (!viaGain) audioEl.volume = vol;
   audioEl.muted = bgmMuted || !audioUnlocked;
   if (audioEl.paused) {
     audioEl.play().catch(() => {}); // 自動再生制限時はミュート状態で待機し、初回操作で解除される
@@ -954,6 +960,62 @@ function setRankingSort(key) {
   render();
 }
 
+// ランキングの行をタップした時の詳細。
+// 保存されている範囲で、そのサクセスがどういう内容だったかを見せる。
+function showRankDetail(index) {
+  const r = (rankingData || [])[index];
+  if (!r) return;
+  const statsHtml = (r.stats && Object.keys(r.stats).length > 0)
+    ? StatsEngine.STAT_ORDER.map(key => {
+        const v = r.stats[key] || 0;
+        return `
+          <div class="chara-stat-row">
+            <span class="chara-stat-name">${StatsEngine.STAT_DEFS[key].name}</span>
+            <div class="chara-stat-bar"><div class="chara-stat-fill" style="width:${Math.min(100, v)}%;"></div></div>
+            <span class="chara-stat-rank">${StatsEngine.getRank(v)}</span>
+          </div>`;
+      }).join('')
+    : '<p class="rank-detail-none">この記録にはステータスが残っていません</p>';
+  const abilityHtml = (r.abilities && r.abilities.length > 0)
+    ? r.abilities.map(a => `<span class="chara-ability ${a.negative ? 'chara-ability-bad' : ''}">${a.label}</span>`).join('')
+    : '<p class="rank-detail-none">特殊能力なし</p>';
+  const statusLabel = r.agencyStatus === 'major'
+    ? (r.debutTurn ? `${window.GameData.turnToDateLabel(r.debutTurn)}にメジャーデビュー` : 'メジャーデビュー')
+    : (r.agencyStatus === 'indie' ? 'インディーズ所属' : '無所属');
+  const debut = '';
+  showModal(`
+    <div class="modal-card modal-card-scroll">
+      <div class="rank-detail-head">
+        <img src="${r.iconUrl || defaultIconUrl()}" class="rank-detail-face" />
+        <div class="rank-detail-name">
+          <p class="rank-detail-band">${r.bandName || '???'}
+            ${r.isMajor ? '<span class="rank-major">MAJOR</span>' : ''}</p>
+          <p class="rank-detail-player">${r.playerName || '???'}</p>
+          <p class="rank-detail-status">${statusLabel}</p>
+        </div>
+        <div class="rank-detail-rank">
+          <span class="overall-rank-badge">${r.overallRank || 'G'}</span>
+          <span class="rank-detail-score">${r.overallScore || 0}</span>
+        </div>
+      </div>
+      <p class="chara-section-title">ステータス</p>
+      <div class="chara-stats">${statsHtml}</div>
+      <p class="chara-section-title">特殊能力</p>
+      <div class="chara-abilities">${abilityHtml}</div>
+      <p class="chara-section-title">サクセスの成績</p>
+      <div class="rank-detail-grid">
+        <div class="rank-detail-cell"><span>知名度</span><b>${(r.fame || 0).toLocaleString()}</b></div>
+        <div class="rank-detail-cell"><span>フォロワー</span><b>${(r.followers || 0).toLocaleString()}</b></div>
+        <div class="rank-detail-cell"><span>最高動員</span><b>${(r.bestAudience || 0).toLocaleString()}人</b></div>
+        <div class="rank-detail-cell"><span>CD</span><b>${r.releasedCount || 0}枚</b></div>
+        <div class="rank-detail-cell"><span>総販売</span><b>${(r.totalUnitsSold || 0).toLocaleString()}枚</b></div>
+        <div class="rank-detail-cell"><span>総収入</span><b>${yen(r.totalEarnings || 0)}</b></div>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal()">閉じる</button>
+    </div>
+  `);
+}
+
 function screenRankingTitleFull() {
   const online = window.FirebaseSvc && window.FirebaseSvc.isConfigured() && window.FirebaseSvc.isReady();
   if (online && rankingData === null && !rankingLoading) {
@@ -971,7 +1033,7 @@ function screenRankingTitleFull() {
   const rows = (rankingData || []).map((r, i) => {
     const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : (i + 1)));
     return `
-    <div class="rank-row">
+    <button class="rank-row rank-row-tap" onclick="showRankDetail(${i})">
       <div class="rank-no ${i < 3 ? 'rank-no-top' : ''}">${medal}</div>
       <img src="${r.iconUrl || defaultIconUrl()}" class="rank-face" loading="lazy" decoding="async" />
       <div class="rank-body">
@@ -980,7 +1042,8 @@ function screenRankingTitleFull() {
         <p class="rank-player">${r.playerName || '???'}</p>
       </div>
       <div class="rank-value">${sortDef.unit(r)}</div>
-    </div>`;
+      <span class="rank-arrow">›</span>
+    </button>`;
   }).join('');
   let body;
   if (!online) {
@@ -3840,7 +3903,7 @@ function screenStatus() {
     <div class="exp-pool-chip"><span>${StatsEngine.EXP_CATEGORY_NAMES[c]}</span><span>${s.expPool[c] || 0}</span></div>
   `).join('');
   return `
-    <img class="hero-box" src="${currentIconUrl()}" onclick="showIconPicker()" style="cursor:pointer;" />
+    <img class="hero-box" src="${currentIconUrl()}" />
     <p class="hero-name">${s.playerName || 'タケル'}</p>
     <p class="hero-caption">${s.bandName || 'タケルバンド'} — ${turnToDateLabel(s.turn)} / ${s.agencyStatus === 'major' ? 'メジャー' : (s.agencyStatus === 'indie' ? ((window.GameData.indieLabelDef(s.indieLabel) || {}).name || 'インディーズ所属') : '無所属')}</p>
     <div class="overall-rank-card">
@@ -3870,9 +3933,7 @@ function screenStatus() {
     ` : `
       <div class="list" style="padding:0 14px;">${abilityRows(s)}</div>
     `}
-    <div style="padding:0 14px;">
-      <button class="genre-btn" style="width:100%;" onclick="showIconPicker()">アイコンを変更</button>
-    </div>
+
     <div class="statgrid">
       <div class="statcard"><p class="statcard-label">所持金</p><p class="statcard-value" style="${s.money < 0 ? 'color:#E06A6A;' : ''}">${s.money < 0 ? '-' : ''}${yen(Math.abs(s.money))}</p></div>
       <div class="statcard"><p class="statcard-label">知名度</p><p class="statcard-value">${Math.round(s.fame).toLocaleString()}</p></div>
@@ -4415,6 +4476,13 @@ function saveCompletedRun(overallRank, overallScore, releasedCount, totalUnitsSo
     releasedCount, totalUnitsSold,
     bestAudience: s.bestAudience || 0,
     fame: Math.round(s.fame), followers: Math.round(s.followers),
+    // 詳細表示用。5ステータスと習得した特殊能力のラベルを残しておく。
+    stats: StatsEngine.STAT_ORDER.reduce((o, k) => { o[k] = Math.round(s.stats[k] || 0); return o; }, {}),
+    abilities: (s.abilities || []).map(a => {
+      const def = StatsEngine.ABILITIES[a.key];
+      const tier = def ? def.tiers.find(t => t.tier === a.tier) : null;
+      return { label: tier ? tier.label : (def ? def.name : a.key), negative: !!(def && def.negative) };
+    }),
     completedAt: Date.now(),
   };
   try {
@@ -5467,7 +5535,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.Sfx) window.Sfx.setMuted(bgmMuted);
   const unlockAudio = () => {
     audioUnlocked = true;
-    if (window.Sfx) window.Sfx.unlock();
+    if (window.Sfx) {
+      window.Sfx.unlock();
+      // iOSでも音量スライダーが効くよう、BGMをWebAudio経由に切り替える
+      window.Sfx.attachBgm(document.getElementById('bgmPlayer'));
+      applyVolumeSettings();
+    }
     const audioEl = document.getElementById('bgmPlayer');
     if (!audioEl) return;
     audioEl.muted = bgmMuted;

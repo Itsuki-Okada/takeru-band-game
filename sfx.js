@@ -94,8 +94,42 @@
 
   const MASTER_VOLUME = 0.60;   // 効果音全体の音量(ui.jsのBGM_VOLUMEと対で調整する)
 
+  // ===== BGMの音量をWebAudio経由にする =====
+  // iOSのSafariは <audio>.volume への代入を無視する(端末の音量ボタンが優先される)ため、
+  // 音量スライダーが効かない。GainNodeを通せばどの環境でも効くようになる。
+  let bgmSource = null;
+  let bgmGain = null;
+
+  function attachBgm(el) {
+    if (!el || bgmSource) return bgmGain;
+    if (!ensureCtx()) return null;
+    try {
+      bgmSource = ctx.createMediaElementSource(el);
+      bgmGain = ctx.createGain();
+      bgmGain.gain.value = 1;
+      bgmSource.connect(bgmGain);
+      bgmGain.connect(ctx.destination);   // masterを通さず直結(効果音の音量とは独立)
+      // 要素側のvolumeはゲインの前段で効いてしまうので、1に戻して一本化する
+      try { el.volume = 1; } catch (e) { /* iOSでは代入が無視されるが、既定が1なので問題ない */ }
+      return bgmGain;
+    } catch (e) {
+      // 既に別の経路へ繋がっている等で失敗したら、従来どおり el.volume に任せる
+      bgmSource = null; bgmGain = null;
+      return null;
+    }
+  }
+
+  function setBgmVolume(v) {
+    if (!bgmGain) return false;
+    bgmGain.gain.value = Math.max(0, Math.min(1, v));
+    return true;
+  }
+
   window.Sfx = {
     play,
+    attachBgm,
+    setBgmVolume,
+    hasBgmGain() { return !!bgmGain; },
     setMuted(v) { muted = !!v; },
     isMuted() { return muted; },
     unlock() { if (ensureCtx() && ctx.state === 'suspended') ctx.resume().catch(() => {}); },

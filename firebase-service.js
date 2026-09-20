@@ -126,6 +126,8 @@
         releasedCount: record.releasedCount || 0,
         totalUnitsSold: record.totalUnitsSold || 0,
         bestAudience: record.bestAudience || 0,
+        stats: record.stats || {},
+        abilities: record.abilities || [],
         completedAt: firebase.firestore.FieldValue.serverTimestamp(),
       };
       const ref = await db.collection('completedRuns').add(doc);

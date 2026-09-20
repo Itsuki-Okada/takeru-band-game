@@ -2301,10 +2301,29 @@ function loadGame() {
     if (!raw) return false;
     const saved = JSON.parse(raw);
     Object.assign(state, saved);
+    ensureInitialFriends();
     return true;
   } catch (e) {
     return false;
   }
+}
+
+// きさら・いつきは最初からいるメンバー。
+// 以前のバージョンで保存されたデータには入っていないことがあるので、
+// 読み込んだ後に足りないぶんを補う。
+function ensureInitialFriends() {
+  state.friends = state.friends || [];
+  // 並び順が入れ替わらないよう、後ろから足していく
+  ['kisara', 'itsuki'].slice().reverse().forEach(key => {
+    if (state.friends.some(f => f.id === key)) return;
+    const npc = NPC_MEMBERS[key];
+    state.friends.unshift({
+      id: key, memberKey: key, isNpc: true,
+      name: npc.name, bandName: npc.bandName, part: npc.part,
+      stats: { ...npc.stats }, abilities: [...npc.abilities],
+      fame: npc.fame, followers: npc.followers, intimacy: 50,
+    });
+  });
 }
 
 function hasSaveData() {
@@ -2337,7 +2356,7 @@ window.GameActions = {
   resolveRyoheiRP3, scheduleRyoheiCollab, finalizeRecordingDay, resolveDrNasakenaiChoice, fleeAfterparty,
   resolveTakumaTkm1, resolveTakumaTkm2, acceptTakumaCollab, declineTakumaCollab,
   startNewGameWithNames, claimAllowanceMail,
-  saveGame, loadGame, hasSaveData, deleteSaveData,
+  saveGame, loadGame, hasSaveData, deleteSaveData, ensureInitialFriends,
 };
 window.GameData = {
   JOBS, PRACTICE_MENUS, GENRES, CD_TYPES, STUDIOS, VENUES, GOODS, MEMBERS, PROMOTIONS, NPC_MEMBERS,
