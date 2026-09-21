@@ -1980,7 +1980,6 @@ function screenRecording() {
 }
 
 const RECORDING_PART_HEIGHT = { drums: 175, bass: 140, keyboard: 148, guitar: 148, vocal: 148 };
-const PRODUCER_HEIGHT = 88;
 
 // 'guest:takuma' のようなフェーズキーから相手のIDを取り出す
 function recordingGuestOf(phaseKey) {
@@ -2004,8 +2003,9 @@ function screenRecordingSession() {
   const config = RECORDING_PHASE_CONFIG[phaseKey] || { label: `${guestId ? recordingGuestName(guestId) : ''}がレコーディング中...` };
   const bg = window.STUDIO_BG[recordingState.studio];
   const charHeight = RECORDING_PART_HEIGHT[phaseKey] || 140;
+  // プロデューサーも主人公たちと同じ大きさで立たせる
   const producerHtml = recordingState.producer
-    ? `<img src="${window.RECORDING_CHARS.producer}" class="recording-producer-img" style="height:${PRODUCER_HEIGHT}px;" />`
+    ? `<img src="${window.RECORDING_CHARS.producer}" class="recording-producer-img" style="height:${guestId ? 150 : charHeight}px;" />`
     : '';
 
   return `
@@ -5663,11 +5663,18 @@ function showDrinkPrompt(isFirst) {
   );
 }
 
+// 1杯の処理中(画像が切り替わる0.5秒ほど)に続けて押されると、
+// 打ち上げの確定が二重に走り、2回目は状態が空なので「0杯飲んだ」と出てしまう。
+// 処理中は次の入力を受け付けない。
+let drinkBusy = false;
+
 function handleDrinkChoice(wantDrink) {
+  if (drinkBusy) return;
   if (!wantDrink) {
     finishAfterpartyFlow();
     return;
   }
+  drinkBusy = true;
   const s = window.GameState;
   const isFirstDrink = !((s.afterpartyState && s.afterpartyState.drinks) || 0);
   const imgEl = document.querySelector('.dialogue-portrait-mini');
@@ -5678,8 +5685,9 @@ function handleDrinkChoice(wantDrink) {
     if (result.done) {
       const finalImg = result.vomited ? window.DRINK_IMAGES.vomit : window.DRINK_IMAGES.d3;
       if (imgEl) imgEl.src = finalImg;
-      setTimeout(() => finishAfterpartyFlow(), 500);
+      setTimeout(() => { drinkBusy = false; finishAfterpartyFlow(); }, 500);
     } else {
+      drinkBusy = false;
       if (imgEl) imgEl.src = window.DRINK_IMAGES.d1;
       showDrinkPrompt(false);
     }
@@ -5688,6 +5696,7 @@ function handleDrinkChoice(wantDrink) {
 
 // 飲みゲームから「逃げる」を選んだ場合。体力のみ回復し、経験点は得られない。
 function handleDrinkFlee() {
+  if (drinkBusy || afterpartyFinishing) return;
   const result = GameActions.fleeAfterparty();
   const segments = [{ text: '隙を見て打ち上げから逃げ出した…', type: 'neutral' }];
   if (result.healthGain > 0) segments.push({ text: `体力が${result.healthGain}回復した`, type: 'plus' });
@@ -5703,6 +5712,7 @@ function handleDrinkFlee() {
     window.AFTERPARTY_BG,
     'live',
     () => {
+      afterpartyFinishing = false;
       afterpartyPartnerKeys = [];
       GameActions.endAfterpartyAndGoHome();
       const s = window.GameState;
@@ -5715,7 +5725,13 @@ function handleDrinkFlee() {
   );
 }
 
+let afterpartyFinishing = false;
 function finishAfterpartyFlow() {
+  // 二重に呼ばれると2回目は杯数0の結果になってしまうので、1回だけ通す
+  if (afterpartyFinishing) return;
+  if (!window.GameState.afterpartyState) return;
+  afterpartyFinishing = true;
+  drinkBusy = false;
   const result = GameActions.finishAfterparty();
   const applied = result.applied || {};
   const segments = [];
