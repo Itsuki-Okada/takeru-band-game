@@ -516,7 +516,7 @@ function expSegments(applied) {
 // 1日の行動のあと、30%でイベントが1つ発生する。
 // 何が起きるかは EVENT_POOL から重み付きで1つ選ぶ。条件(cond)を満たさないものは候補に入らない。
 // 重みが大きいほど出やすく、ナサケナーイ博士だけは他よりかなり低くしてある。
-const EVENT_CHANCE = 0.30;
+const EVENT_CHANCE = 0.40;
 const COLD_FROM_LOW_HP_PRACTICE_CHANCE = 0.2; // 体力50%以下で練習した際に風邪をひく確率(仮の数値)
 // ---- 各イベントの結果。戻り値のsegmentsをUIがそのまま吹き出しに流す ----
 
