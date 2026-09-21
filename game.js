@@ -65,6 +65,9 @@ const state = {
   lastLiveMemberIds: [], // 直近のライブに参加したフレンドID(きさら/いつき等。親密度反映用)
   bandIntimacy: 0,
   afterpartyKnackGained: false,
+  knacks: {},               // 掴んだコツ(習得に必要な経験点が半分になる)
+  tenDrinkCount: 0,         // 打ち上げで10杯飲み切った回数
+  justKnack: null,
   lastPracticeKey: null,    // 飽き性×の判定に使う
   practiceStreak: 0,
   startingAbility: null,     // 開始時に抽選された特殊能力
@@ -82,6 +85,7 @@ const state = {
   lastLiveTurn: null,       // 直近でライブを打ったターン(客足の回復に使う)
   bestAudience: 0,          // 1回のライブで集めた最高動員(メジャーの条件に使う)
   livePromoUsedTurn: null,  // 直近で宣伝を行ったターン(週1回まで)
+  promoCountThisLive: 0,    // 次のライブまでに宣伝した回数
   liveExtraAudience: 0,     // 宣伝で積み上がった追加来場数
   justCollabLive: null,
   justFriendOffer: null,
@@ -103,8 +107,13 @@ const state = {
 };
 
 // ===== マスタデータ =====
-const MEMBER_COST = 10000;
+const MEMBER_COST = 25000;
 const PRODUCER_COST = 30000;
+// レコーディングのゲスト参加(たくま・りょーぺ)。親密度がMAXになると頼めるようになる。
+// ライブのサポートメンバーにはできない(あくまでスタジオでの客演)。
+const RECORD_GUEST_COST = 60000;
+const RECORD_GUEST_MIN_INTIMACY = 100;
+const RECORD_GUEST_IDS = ['takuma', 'ryohei'];
 const RECORDING_COST_PER_SONG = 15000;
 const MONTHLY_PERFORMANCE_THRESHOLD = 800;
 const GREAT_CONDITION_CHANCE = 0.02;
@@ -288,9 +297,13 @@ const PROMOTIONS = [
 ];
 
 const PROMO_COOLDOWN_TURNS = 2; // 宣伝は2週間に1回まで
+const PROMO_MAX_PER_LIVE = 2;   // 次のライブまでに打てる宣伝の回数
 function doPromotion(key) {
   const promo = PROMOTIONS.find(p => p.key === key);
   if (!promo) return;
+  if ((state.promoCountThisLive || 0) >= PROMO_MAX_PER_LIVE) {
+    addLog(`次のライブまでに宣伝できるのはあと0回です`, 'neutral'); render(); return;
+  }
   if (state.livePromoUsedTurn !== null && (state.turn - state.livePromoUsedTurn) < PROMO_COOLDOWN_TURNS) {
     addLog(`宣伝は${PROMO_COOLDOWN_TURNS}週間に1回までです`, 'neutral'); render(); return;
   }
@@ -304,6 +317,7 @@ function doPromotion(key) {
   state.fame += Math.round(promo.fameGain * FAME_GROWTH * snsMult);
   state.followers += Math.round(promo.followerGain * FAME_GROWTH * snsMult);
   state.livePromoUsedTurn = state.turn;
+  state.promoCountThisLive = (state.promoCountThisLive || 0) + 1;
   addLog(`${promo.name}を実施した${promo.cost > 0 ? `(-${yen(promo.cost)})` : '(無料)'}`, promo.cost > 0 ? 'minus' : 'neutral');
   addLog(`来場数が${audienceGain}人増える見込み`, 'plus');
   addLog(`知名度が${promo.fameGain}増えた`, 'plus');
@@ -413,6 +427,8 @@ const LIVE_EXP_BY_VENUE = {
 let LIVE_EXP_FILL_MIN = 0.55;
 // ライブに一緒に出たメンバーとの親密度が、1本ごとにこれだけ上がる
 let LIVE_INTIMACY_GAIN = 5;
+// チケット売上のうち、バンドの取り分。残りは会場と運営に渡る。
+let LIVE_REVENUE_SHARE = 0.55;
 
 // 経験点の内訳を「筋力経験点を10得た」のように1行ずつにする
 function expSegments(applied) {
@@ -665,6 +681,9 @@ function checkTakumaMeeting() {
   state.justTakumaEvent = 'TKM1';
 }
 
+// 10杯飲み切るのをこの回数こなすと「打ち上げ王」のコツが手に入る
+const AFTERPARTY_KING_TIMES = 5;
+
 // ===== 超特殊能力(親密度100で習得) =====
 function learnSuperAbilityFrom(friendId) {
   const f = state.friends.find(x => x.id === friendId);
@@ -695,6 +714,15 @@ function isGuestCandidate(friend) {
   const npc = NPC_MEMBERS[friend.memberKey || friend.id];
   const band = (friend.bandName || (npc && npc.bandName) || '').trim();
   return band.length > 0;
+}
+
+// レコーディングにゲストとして呼べるフレンド(親密度MAXのたくま・りょーぺのみ)
+function recordGuestCandidates() {
+  return (state.friends || []).filter(f =>
+    RECORD_GUEST_IDS.includes(f.id) && (f.intimacy || 0) >= RECORD_GUEST_MIN_INTIMACY);
+}
+function canGuestRecord(friendId) {
+  return recordGuestCandidates().some(f => f.id === friendId);
 }
 
 function canInviteGuest(friendId) {
@@ -797,7 +825,7 @@ const EVENT_POOL = [
     fire: () => { state.justChoiceEvent = { key: 'labelreq' }; } },
 
   // --- 仲間・お誘い ---
-  { key: 'friendOffer', weight: 5, cond: () => state.friends.length > 0, fire: () => generateFriendOffer() },
+  { key: 'friendOffer', weight: 12, cond: () => state.friends.some(f => isGuestCandidate(f)), fire: () => generateFriendOffer() },
   { key: 'keiba',       weight: 5, cond: () => true,
     fire: () => { state.justKeibaEvent = { raceName: KEIBA_RACE_NAMES[Math.floor(Math.random() * KEIBA_RACE_NAMES.length)] }; } },
 
@@ -845,7 +873,9 @@ function checkRandomEvent() {
 
 function pickRandomFriend() {
   // 今週フレンドになったばかりの相手は、同じ週のうちに対バンオファーが来ないよう除外する
-  const pool = state.ryoheiJustBecameFriend ? state.friends.filter(f => f.id !== 'ryohei') : state.friends;
+  // 対バンは相手のバンドと組むもの。自分のバンドのメンバーは相手にならない。
+  let pool = state.friends.filter(f => isGuestCandidate(f));
+  if (state.ryoheiJustBecameFriend) pool = pool.filter(f => f.id !== 'ryohei');
   if (pool.length === 0) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -926,6 +956,14 @@ function finalizeFriendOfferLive(offer, memberKeys) {
     if (isRyoheiFirstCollab) {
       state.ryoheiEvents.rp4Done = true; // RP4はこの直後の打ち上げでui.js側が明示的に表示する
     }
+  }
+  // 対バンが終わったら予約を解除する。これをしないと、たくまのイベントが
+  // 「対バン予約済み」の判定に引っかかって二度と出なくなる。
+  if (offer.friendId === 'takuma') {
+    state.takumaEvents.collabPending = false;
+    state.takumaEvents.collabTurn = null;
+    state.takumaEvents.collabAnnounced = false;
+    state.takumaPendingOffer = null;
   }
   const info = { friendId: offer.friendId, friendName: offer.friendName, bandName: offer.bandName, venueName: venue.name, venueKey: venue.key, audience, fameGain, gala: offer.gala, isRyoheiFirstCollab };
   state.justCollabLive = info;
@@ -1308,8 +1346,9 @@ function addIntimacy(friend, amount) {
   let delta = amount;
   if (delta > 0 && hasAbility('charisma')) delta = Math.round(delta * 1.5);
   if (delta > 0 && hasAbility('hitotarashi')) delta = Math.round(delta * 2);   // 人たらし
-  friend.intimacy = (friend.intimacy || 0) + delta;
-  return delta;
+  const before = friend.intimacy || 0;
+  friend.intimacy = Math.max(0, Math.min(100, before + delta));   // 上限100
+  return friend.intimacy - before;
 }
 
 function grantExp(gains) {
@@ -1522,7 +1561,7 @@ function advanceWeek(opts) {
   // このフラグを見たUI側(showStartOfDayPopupsIfAny)がエンディングの演出に入る。
   if (state.turn >= TOTAL_TURNS && !state.gameEnded) {
     state.gameEnded = true;
-    addLog('2年間のサクセス期間が終了した', 'neutral');
+    addLog('2年半のサクセス期間が終了した', 'neutral');
   }
 }
 
@@ -1613,8 +1652,8 @@ let INDIE_OVERALL_REQUIRED = 50;   // Dランク相当
 // 条件を満たしても、すぐ声がかかるわけではない。満たしている間だけ毎回抽選する。
 // 1年半で約20%、2年で約40%が到達するように、実際に2年ぶんを回して決めた数値。
 let MAJOR_AUDIENCE_REQUIRED = 700;      // 1本のライブで呼べた最高動員
-let MAJOR_FAME_REQUIRED = 26000;
-let MAJOR_FOLLOWERS_REQUIRED = 18000;
+let MAJOR_FAME_REQUIRED = 22000;
+let MAJOR_FOLLOWERS_REQUIRED = 15000;
 let MAJOR_OVERALL_REQUIRED = 74;        // Bランク相当
 let MAJOR_OFFER_CHANCE = 0.40;        // 条件を満たせば数週以内に必ず声がかかる(=抽選ではなく条件で決まる)
 
@@ -1703,13 +1742,13 @@ function acceptIndieLabel(labelKey) {
   const before = state.health;
   state.health = Math.min(maxHealth, state.health + 20);
   const healed = Math.round(state.health - before);
-  StatsEngine.gainExp(state.expPool, { str: 30, ski: 30, int: 30, men: 30 });
+  const applied = grantExp({ str: 30, ski: 30, int: 30, men: 30 });
   addLog(`${label.name}に所属した！(${label.perk})`, 'plus');
   render();
   return [
     { text: `${label.name}に所属した！`, type: 'plus' },
     { text: label.perk, type: 'plus' },
-    { text: '筋力・技術・知力・精神の経験点を30ずつ得た', type: 'plus' },
+    ...expSegments(applied),
     { text: `体力が${healed}回復した`, type: 'plus' },
   ];
 }
@@ -1869,9 +1908,11 @@ function startSong(genre, customTitle) {
 }
 
 // ===== アクション: CD制作(複数曲をまとめてレコーディング) =====
-function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, producerHired) {
+function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, producerHired, guestIds) {
   if (isFeverBlocked()) return;
   memberKeys = memberKeys || [];
+  // 親密度MAXでないゲストが紛れ込まないよう、ここでも必ず弾く
+  guestIds = (guestIds || []).filter(canGuestRecord);
   const type = cdTypeOf(typeKey);
   const studio = STUDIOS.find(st => st.key === studioKey) || STUDIOS[0];
   if (!type) { addLog('CD種別が正しくありません', 'neutral'); render(); return; }
@@ -1893,16 +1934,19 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
   }
   const memberCost = memberKeys.length * MEMBER_COST;
   const producerCost = producerHired ? PRODUCER_COST : 0;
+  const guestCost = guestIds.length * RECORD_GUEST_COST;
   const recordingBaseCost = songs.length * studio.costPerSong;
   const discountedRecordingCost = Math.round(recordingBaseCost * recordingCostMult());
-  const totalCost = discountedRecordingCost + memberCost + producerCost;
+  const totalCost = discountedRecordingCost + memberCost + producerCost + guestCost;
   if (state.money < totalCost) { notifyInsufficientFunds(); render(); return; }
 
   state.money -= totalCost;
   songs.forEach(s => { s.used = true; });
   const memberBonus = 1 + memberKeys.length * 0.06;
   const producerBonus = producerHired ? 1.1 : 1.0;
-  const completionAvg = Math.min(100, Math.round((songs.reduce((a, s) => a + s.completion, 0) / songs.length) * memberBonus * studio.qualityBonus * producerBonus));
+  // ゲストは一線級なので、サポートメンバーより完成度への効き目が大きい
+  const guestBonus = 1 + guestIds.length * 0.14;
+  const completionAvg = Math.min(100, Math.round((songs.reduce((a, s) => a + s.completion, 0) / songs.length) * memberBonus * studio.qualityBonus * producerBonus * guestBonus));
 
   const release = {
     id: state.releaseIdSeq++,
@@ -1925,10 +1969,22 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
   state.releases.unshift(release);
   const cm = conditionMult();
   const appliedExp = grantExp(rollExpFromRanges({ str: [10, 20], ski: [10, 20], int: [10, 20], men: [10, 20] }));
+  // ゲストと一緒に録ると、そのぶん技術・精神の学びがある
+  if (guestIds.length) {
+    const g = guestIds.length;
+    const extra = grantExp(rollExpFromRanges({ ski: [8 * g, 14 * g], int: [8 * g, 14 * g], men: [5 * g, 10 * g] }));
+    Object.keys(extra).forEach(cat => { appliedExp[cat] = (appliedExp[cat] || 0) + extra[cat]; });
+    guestNames.forEach(n => addLog(`${n}がレコーディングに参加してくれた！`, 'plus'));
+  }
   const memberNote = memberKeys.length ? ` / サポート${memberKeys.length}名雇用` : '';
   const producerNote = producerHired ? ' / プロデューサー起用' : '';
+  const guestNames = guestIds.map(id => {
+    const f = (state.friends || []).find(x => x.id === id);
+    return f ? f.name : id;
+  });
+  const guestNote = guestNames.length ? ` / ゲスト: ${guestNames.join('・')}` : '';
   const discountNote = recordingCostMult() < 1 ? '(レーベルのレコーディング費用負担あり)' : '';
-  addLog(`「${release.title}」(${type.name}/${songs.length}曲/${studio.name})を制作した${discountNote}(-${yen(totalCost)}${memberNote}${producerNote})`, 'minus');
+  addLog(`「${release.title}」(${type.name}/${songs.length}曲/${studio.name})を制作した${discountNote}(-${yen(totalCost)}${memberNote}${producerNote}${guestNote})`, 'minus');
   state.justRecordedCD = { releaseId: release.id, title: release.title, typeName: release.typeName, songCount: release.songCount, completionAvg: release.completionAvg, studioName: studio.name, studioKey: studio.key, appliedExp };
   const healthCost = Math.min(25, 5 + songs.length * 1.5);
   applyHealthCost(healthCost);
@@ -2038,7 +2094,8 @@ function doLive(memberKeys, opts) {
   const fill = venue.capacity > 0 ? audience / venue.capacity : 0;
   const reserved = Math.min(audience, Math.round(audience * 0.75));
 
-  const revenue = Math.round(audience * venue.ticket * (0.8 + performanceFinal / 250));
+  // チケット代がまるごと手元に残るわけではない。会場や運営の取り分を引いたぶんが収入になる。
+  const revenue = Math.round(audience * venue.ticket * (0.8 + performanceFinal / 250) * LIVE_REVENUE_SHARE);
   const profit = revenue - totalCost;
 
   // 知名度は「何人の前で演奏したか」と「どれだけ埋まったか」で決まる。
@@ -2120,6 +2177,7 @@ function doLive(memberKeys, opts) {
   }
   state.liveExtraAudience = 0;
   state.livePromoUsedTurn = null;
+  state.promoCountThisLive = 0;
 
   advanceWeek();
   render();
@@ -2148,8 +2206,9 @@ function drinkAtAfterparty() {
   if (!ap || ap.vomited) return { vomited: false, done: true, drinks: ap ? ap.drinks : 0 };
   ap.drinks += 1;
   // 吐く確率: 2%からスタートし、飲むほど上昇(8杯目あたりで約10%)
-  // 打ち上げ◯を持っていると吐きにくい
-  const vomitMult = hasAbility('afterparty') ? 0.4 : 1;
+  // 打ち上げ◯を持っていると吐きにくい。打ち上げ王なら一切吐かない。
+  const apTier = abilityTier('afterparty');
+  const vomitMult = apTier >= 3 ? 0 : (apTier >= 1 ? 0.4 : 1);
   const vomitChance = Math.min(0.35, (0.02 + Math.max(0, ap.drinks - 1) * 0.011) * vomitMult);
   const vomited = Math.random() < vomitChance;
   if (vomited) ap.vomited = true;
@@ -2164,7 +2223,10 @@ function finishAfterparty() {
   const vomited = ap.vomited;
   const tier = getAfterpartyTier(drinks);
 
-  const expRange = { str: [tier.expMin, tier.expMax], ski: [tier.expMin, tier.expMax], int: [tier.expMin, tier.expMax], men: [tier.expMin, tier.expMax] };
+  // 打ち上げ王は飲んだぶんがしっかり身になる
+  const kingMult = abilityTier('afterparty') >= 3 ? 1.5 : 1;
+  const eMin = Math.round(tier.expMin * kingMult), eMax = Math.round(tier.expMax * kingMult);
+  const expRange = { str: [eMin, eMax], ski: [eMin, eMax], int: [eMin, eMax], men: [eMin, eMax] };
   const applied = grantExp(rollExpFromRanges(expRange));
 
   if (state.lastLiveHadMembers) {
@@ -2184,15 +2246,24 @@ function finishAfterparty() {
     applyHealthCost(Math.abs(tier.health));
   }
 
-  if (drinks >= 10 && !state.afterpartyKnackGained) {
-    const ability = StatsEngine.ABILITIES.afterparty;
-    if (ability && ability.tiers[0] && ability.tiers[0].cost) {
-      ability.tiers[0].cost = {
-        men: Math.max(1, Math.round(ability.tiers[0].cost.men * 0.5)),
-        str: Math.max(1, Math.round(ability.tiers[0].cost.str * 0.5)),
-      };
+  // 10杯飲み切った回数を数える。
+  // 1回目で「打ち上げ◯」のコツ、5回で金ランク「打ち上げ王」のコツが手に入る。
+  if (drinks >= 10) {
+    state.knacks = state.knacks || {};
+    state.tenDrinkCount = (state.tenDrinkCount || 0) + 1;
+    // すでに打ち上げ◯を習得済みなら、そのコツはもう要らない
+    const hasAfterparty = (state.abilities || []).some(a => a.key === 'afterparty');
+    if (!state.knacks.afterparty && !hasAfterparty) {
+      state.knacks.afterparty = true;
       state.afterpartyKnackGained = true;
-      addLog('打ち上げ◯のコツをつかんだ！(習得に必要な経験点が減った)', 'plus');
+      addLog('打ち上げ◯のコツをつかんだ！(習得に必要な経験点が半分になった)', 'plus');
+    }
+    if (state.tenDrinkCount >= AFTERPARTY_KING_TIMES && !state.knacks.afterpartyKing) {
+      state.knacks.afterpartyKing = true;
+      addLog(`10杯飲み切るのを${AFTERPARTY_KING_TIMES}回達成！「打ち上げ王」のコツをつかんだ`, 'money');
+      state.justKnack = { label: '打ち上げ王', note: '金特殊能力「打ち上げ王」が習得できるようになった' };
+    } else if (!state.knacks.afterpartyKing) {
+      addLog(`10杯飲み切った(${state.tenDrinkCount}/${AFTERPARTY_KING_TIMES})`, 'plus');
     }
   }
 
@@ -2534,8 +2605,8 @@ window.GameActions = {
   resolveStreetLive, resolveBrokenGear, resolveSnsBuzz, resolveMagazine,
   resolveParentCall, resolveCdOnAir, resolveLabelRequest,
   spendExtraWeek,
-  doPromotion, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
-  GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
+  doPromotion, recordGuestCandidates, canGuestRecord, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
+  AFTERPARTY_KING_TIMES, GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
   GUEST_INVITE_MIN_INTIMACY, canInviteGuest, isGuestCandidate, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
   learnSuperAbilityFrom, canLearnSuperFrom,
   resolveRyoheiRP3, scheduleRyoheiCollab, finalizeRecordingDay, resolveDrNasakenaiChoice, fleeAfterparty,
@@ -2546,6 +2617,7 @@ window.GameActions = {
 window.GameData = {
   JOBS, jobMasteryMult, JOB_MASTERY_WAGE_BONUS, JOB_MASTERY_EXP_BONUS, PRACTICE_MENUS, GENRES, CD_TYPES, STUDIOS, VENUES, GOODS, MEMBERS, PROMOTIONS, NPC_MEMBERS,
   INDIE_LABELS, INDIE_OFFER_THRESHOLD, indieLabelDef, recordingCostMult,
+  RECORD_GUEST_COST, RECORD_GUEST_MIN_INTIMACY, RECORD_GUEST_IDS,
   INDIE_OVERALL_REQUIRED, meetsIndieRequirements,
   MAJOR_AUDIENCE_REQUIRED, MAJOR_FAME_REQUIRED, MAJOR_FOLLOWERS_REQUIRED, MAJOR_OVERALL_REQUIRED, meetsMajorRequirements,
   MAJOR_SALARY_MIN, MAJOR_SALARY_MAX, calcMajorSalary,

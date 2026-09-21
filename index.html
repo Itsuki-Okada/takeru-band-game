@@ -530,6 +530,27 @@
     image-rendering: pixelated;
     filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4));
   }
+  .friend-invite-note-gold {
+    color: #E8C468 !important;
+    font-weight: 700;
+  }
+  .recording-guest-row {
+    position: absolute;
+    bottom: 4%;
+    right: 1%;
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .recording-guest-img {
+    height: 98px;
+    width: auto;
+    object-fit: contain;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4));
+  }
   .live-performers-row {
     position: absolute;
     bottom: 4%;
@@ -1515,6 +1536,51 @@
   .cd-type-sub { font-size: 10.5px; color: rgba(255,255,255,0.5); margin-top: 2px; }
   .cd-type-need { font-size: 10.5px; color: #E06A6A; margin-top: 3px; }
   .cd-type-arrow { color: rgba(255,255,255,0.3); font-size: 20px; flex: none; }
+  /* ===== 能力のランク別の色 ===== */
+  /* 通常=青 / 金=金 / 超特殊=虹 / マイナス=赤 */
+  .ability-tone-normal { border-color: rgba(110,168,224,0.45) !important; }
+  .ability-chip.ability-tone-normal {
+    color: #8FC4EE; background: rgba(110,168,224,0.14); border: 1px solid rgba(110,168,224,0.45);
+  }
+  .ability-row.ability-tone-normal { background: rgba(110,168,224,0.06); }
+  .ability-tone-gold { border-color: rgba(232,196,104,0.6) !important; }
+  .ability-chip.ability-tone-gold {
+    color: #241B06; font-weight: 800;
+    background: linear-gradient(180deg, #E8C468, #C9A44E);
+    border: 1px solid rgba(232,196,104,0.8);
+  }
+  .ability-row.ability-tone-gold { background: rgba(232,196,104,0.1); }
+  .ability-chip.ability-tone-super, .ability-row.ability-tone-super {
+    border: 1px solid transparent !important;
+    background:
+      linear-gradient(#1a1a22, #1a1a22) padding-box,
+      linear-gradient(100deg, #E06A6A, #E8C468, #8FBF6A, #6EA8E0, #B07AC7) border-box;
+  }
+  .ability-chip.ability-tone-super {
+    color: #F5EEDD; font-weight: 800;
+    background:
+      linear-gradient(rgba(26,26,34,0.9), rgba(26,26,34,0.9)) padding-box,
+      linear-gradient(100deg, #E06A6A, #E8C468, #8FBF6A, #6EA8E0, #B07AC7) border-box;
+  }
+  .ability-chip.ability-tone-bad {
+    color: #E06A6A; background: rgba(224,106,106,0.12); border: 1px solid rgba(224,106,106,0.45);
+  }
+  /* キャラ詳細・サクセス済みの一覧でも、青/金/虹の色分けをそろえる */
+  .chara-ability.ability-tone-normal {
+    color: #9FC6EC; background: rgba(110,168,224,0.12); border: 1px solid rgba(110,168,224,0.45);
+  }
+  .chara-ability.ability-tone-gold {
+    color: #E8C468; background: rgba(232,196,104,0.14); border: 1px solid rgba(232,196,104,0.6);
+  }
+  .chara-ability.ability-tone-super {
+    color: #F5EEDD; font-weight: 800; border: 1px solid transparent;
+    background:
+      linear-gradient(rgba(26,26,34,0.9), rgba(26,26,34,0.9)) padding-box,
+      linear-gradient(100deg, #E06A6A, #E8C468, #8FBF6A, #6EA8E0, #B07AC7) border-box;
+  }
+  .chara-ability.ability-tone-bad {
+    color: #E06A6A; background: rgba(224,106,106,0.12); border: 1px solid rgba(224,106,106,0.45);
+  }
   /* ===== 絆の特殊能力(超特殊) ===== */
   .super-panel {
     margin: 0 14px 18px; padding: 13px;
@@ -3080,20 +3146,20 @@
       measurementId: "G-3FCH2Y6VSE",
     };
   </script>
-  <script>window.APP_VERSION = "110";</script>
-  <script src="firebase-service.js?v=110"></script>
-  <script src="icons.js?v=110"></script>
-  <script src="stats-engine.js?v=110"></script>
+  <script>window.APP_VERSION = "112";</script>
+  <script src="firebase-service.js?v=112"></script>
+  <script src="icons.js?v=112"></script>
+  <script src="stats-engine.js?v=112"></script>
   <!-- 効果音(WebAudioで合成。音声ファイルは持たない) -->
-  <script src="sfx.js?v=110"></script>
-  <script src="game.js?v=110"></script>
-  <script src="ui.js?v=110"></script>
+  <script src="sfx.js?v=112"></script>
+  <script src="game.js?v=112"></script>
+  <script src="ui.js?v=112"></script>
   <!-- エンディングだけを確認するためのプレビュー(index.html?ending=1)。
        パラメータが無ければ何もしない。不要になればこの1行とending-preview.jsを消すだけでよい。 -->
-  <script src="keiba.js?v=110"></script>
-  <script src="ending-preview.js?v=110"></script>
+  <script src="keiba.js?v=112"></script>
+  <script src="ending-preview.js?v=112"></script>
   <!-- 選択肢のあるイベントだけを確認するためのプレビュー(index.html?event=1)。
        パラメータが無ければ何もしない。不要になればこの1行とevent-preview.jsを消すだけでよい。 -->
-  <script src="event-preview.js?v=110"></script>
+  <script src="event-preview.js?v=112"></script>
 </body>
 </html>

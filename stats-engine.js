@@ -80,7 +80,7 @@ const StatsEngine = (function () {
   const RANK_BASE_COST = [6, 9, 13, 18, 24, 32, 42, 55, 70]; // G,F,E,D,C,B,A,S,S1以降(共通)
   // 上のランクほど伸びにくくする度合い。1.0で従来どおり。
   // 大きくすると、高ランク帯の1ポイントが重くなる。
-  let COST_CURVE = 1.15;
+  let COST_CURVE = 1.25;
   function setCostCurve(v) { COST_CURVE = Math.max(0.1, Number(v) || 1); }
   function pointCost(currentValue) {
     const idx = Math.min(getRankIndex(currentValue), RANK_BASE_COST.length - 1);
@@ -184,10 +184,15 @@ const StatsEngine = (function () {
       tiers: [{ tier: 'normal', label: 'リズム感◯', cost: { str: 40, ski: 40 } }],
     },
     afterparty: {
+      knackKey: 'afterparty',
       name: '打ち上げ',
-      effect: 'ライブ後の打ち上げで吐きにくくなる',
+      effect: 'ライブ後の打ち上げで吐きにくくなる。「打ち上げ王」まで上げると一切吐かず、飲んだぶんの経験点も増える',
       unlockType: 'exp',
-      tiers: [{ tier: 'normal', label: '打ち上げ◯', cost: { men: 60, str: 30 } }],
+      // 金ランクの「打ち上げ王」は、10杯飲み切るのを5回達成してコツを掴まないと習得できない
+      tiers: [
+        { tier: 'normal', label: '打ち上げ◯', cost: { men: 60, str: 30 } },
+        { tier: 'gold', label: '打ち上げ王', cost: { men: 140, str: 120 }, needsKnack: 'afterpartyKing' },
+      ],
     },
     design: {
       name: 'デザイン',
@@ -352,8 +357,13 @@ const StatsEngine = (function () {
       const mastery = (state.jobMastery && state.jobMastery[def.masteryJob]) || 0;
       if (mastery < 100) return { ok: false, reason: 'mastery_not_max' };
     } else {
+      if (nextTier.needsKnack && !(state.knacks || {})[nextTier.needsKnack]) {
+        return { ok: false, reason: 'needs_knack' };
+      }
       const rawCost = nextTier.cost || {};
-      const discount = costMultiplier(state);
+      let discount = costMultiplier(state);
+      // コツを掴んでいる能力は必要経験点が半分になる
+      if (def.knackKey && (state.knacks || {})[def.knackKey]) discount *= 0.5;
       const cost = {};
       Object.keys(rawCost).forEach(c => { cost[c] = Math.max(1, Math.round(rawCost[c] * discount)); });
       const shortage = Object.keys(cost).filter(c => (state.expPool[c] || 0) < cost[c]);
@@ -410,11 +420,19 @@ const StatsEngine = (function () {
 
   // 習得できる状態か。親密度・未所持・経験点をそれぞれ見る。
   // 戻り値: { ok, reason, key, cost, shortage }
+  // 絆の特殊能力は1サクセスにつき1つだけ。誰と深く付き合うかを選ぶことになる。
+  function ownedSuperKey(state) {
+    const a = (state.abilities || []).find(x => { const d = ABILITIES[x.key]; return d && d.super; });
+    return a ? a.key : null;
+  }
+
   function superAbilityStatus(state, friend) {
     if (!friend || !friend.isNpc) return { ok: false, reason: 'not_npc' };
     const key = superAbilityFor(friend.id);
     if (!key) return { ok: false, reason: 'none' };
     if (hasAbilityKey(state, key)) return { ok: false, reason: 'owned', key };
+    const other = ownedSuperKey(state);
+    if (other) return { ok: false, reason: 'already_have_other', key, otherLabel: ABILITIES[other].tiers[0].label };
     const cost = superAbilityCost(state, key);
     if ((friend.intimacy || 0) < FRIENDSHIP_ABILITY_REQUIRED) {
       return { ok: false, reason: 'intimacy', key, cost };
@@ -499,7 +517,7 @@ const StatsEngine = (function () {
     raiseStat, calcOverallScore, getOverallRank,
     tryUnlockAbility, hasSense, grantRandomNegative, rollStartingAbility,
     FRIENDSHIP_ABILITY_REQUIRED, superAbilityFor, canLearnSuperAbility, learnSuperAbility,
-    superAbilityStatus, superAbilityCost,
+    superAbilityStatus, superAbilityCost, ownedSuperKey,
     createInitialFoundation,
   };
 })();

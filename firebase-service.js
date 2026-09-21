@@ -174,6 +174,18 @@
     }
   }
 
+  // 自分の完走記録を1件消す(ランキングからも消える)
+  async function deleteCompletedRun(runId) {
+    if (!ready || !runId) return false;
+    try {
+      await db.collection('completedRuns').doc(runId).delete();
+      return true;
+    } catch (err) {
+      console.warn('[FirebaseSvc] 記録の削除に失敗', err);
+      return false;
+    }
+  }
+
   // アカウント名を変えた時、過去の完走記録の名前もまとめて直す
   async function renameMyRuns(newName) {
     if (!ready) return 0;
@@ -400,6 +412,7 @@
     fetchPlayerProfile,
     fetchRanking,
     saveCompletedRun,
+    deleteCompletedRun,
     fetchCompletedRuns,
     fetchMajorBands,
     renameMyRuns,

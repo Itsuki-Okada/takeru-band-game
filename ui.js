@@ -926,20 +926,80 @@ function screenCharaProfileFull() {
 }
 
 // ===== サクセス済みのキャラ =====
+let completedRunsCache = [];
+
+// クリアしたキャラの詳細。ランキングの詳細と同じ見た目で出し、ここから削除もできる。
+function showCompletedDetail(index) {
+  const r = completedRunsCache[index];
+  if (!r) return;
+  const saved = rankingData;
+  rankingData = [r];
+  showRankDetail(0);
+  rankingData = saved;
+  // 削除ボタンを足す
+  const card = document.querySelector('.modal-card');
+  if (!card) return;
+  const btn = document.createElement('button');
+  btn.className = 'modal-close-btn completed-delete-btn';
+  btn.textContent = 'この記録を削除';
+  btn.onclick = () => confirmDeleteCompleted(index);
+  card.insertBefore(btn, card.lastElementChild);
+}
+
+function confirmDeleteCompleted(index) {
+  const r = completedRunsCache[index];
+  if (!r) return;
+  closeModal();
+  setTimeout(() => {
+    showModal(`
+      <div class="modal-card">
+        <p class="modal-title">記録を削除しますか？</p>
+        <p class="modal-sub">「${r.bandName || 'タケルバンド'}」の記録を消します。<br>ランキングからも消え、元に戻せません。</p>
+        <button class="modal-primary-btn" onclick="deleteCompletedRun(${index});">削除する</button>
+        <button class="modal-close-btn" onclick="closeModal()">やめる</button>
+      </div>
+    `);
+  }, 260);
+}
+
+function deleteCompletedRun(index) {
+  const r = completedRunsCache[index];
+  closeModal();
+  if (!r) return;
+  // ローカルの記録を消す
+  try {
+    const key = 'takeru_completed_runs';
+    const runs = JSON.parse(localStorage.getItem(key) || '[]');
+    const idx = runs.findIndex(x => x.completedAt === r.completedAt);
+    if (idx >= 0) { runs.splice(idx, 1); localStorage.setItem(key, JSON.stringify(runs)); }
+  } catch (e) { /* 保存できない環境は無視 */ }
+  // ランキング側(Firestore)の記録も消す
+  if (r.remoteId && window.FirebaseSvc && window.FirebaseSvc.isReady()) {
+    window.FirebaseSvc.deleteCompletedRun(r.remoteId).then(() => {
+      rankingData = null;
+      majorBandsData = null;
+    });
+  }
+  playSfx('cancel');
+  setTimeout(() => render(), 280);
+}
+
 function screenCompletedFull() {
   let runs = [];
   try { runs = JSON.parse(localStorage.getItem('takeru_completed_runs') || '[]'); } catch (e) { /* 保存不可の環境は無視 */ }
   const statusLabel = st => st === 'major' ? 'メジャー' : (st === 'indie' ? 'インディーズ' : '無所属');
-  const rows = runs.map(r => `
-    <div class="rank-row">
+  completedRunsCache = runs;
+  const rows = runs.map((r, i) => `
+    <button class="rank-row rank-row-tap" onclick="showCompletedDetail(${i})">
       <div class="rank-no rank-no-top">${r.agencyStatus === 'major' ? '🏆' : (r.agencyStatus === 'indie' ? '🎸' : '🎤')}</div>
+      <img src="${r.iconUrl || defaultIconUrl()}" class="rank-face" loading="lazy" decoding="async" />
       <div class="rank-body">
         <p class="rank-band">${r.bandName || 'タケルバンド'}
           ${r.agencyStatus === 'major' ? '<span class="rank-major">MAJOR</span>' : ''}</p>
         <p class="rank-player">${statusLabel(r.agencyStatus)} / 総合${r.overallRank} / 知名度${(r.fame || 0).toLocaleString()}</p>
-        <p class="rank-player">総収入${yen(r.totalEarnings || 0)} ・ CD${r.releasedCount || 0}枚 ・ 販売${(r.totalUnitsSold || 0).toLocaleString()}枚</p>
       </div>
-    </div>
+      <span class="rank-arrow">›</span>
+    </button>
   `).join('');
   return `
     <div class="howto-screen">
@@ -992,7 +1052,7 @@ function showRankDetail(index) {
       }).join('')
     : '<p class="rank-detail-none">この記録にはステータスが残っていません</p>';
   const abilityHtml = (r.abilities && r.abilities.length > 0)
-    ? r.abilities.map(a => `<span class="chara-ability ${a.negative ? 'chara-ability-bad' : ''}">${a.label}</span>`).join('')
+    ? r.abilities.map(a => `<span class="chara-ability ${a.tone || (a.negative ? 'ability-tone-bad' : 'ability-tone-normal')} ${a.negative ? 'chara-ability-bad' : ''}">${a.label}</span>`).join('')
     : '<p class="rank-detail-none">特殊能力なし</p>';
   const statusLabel = r.agencyStatus === 'major'
     ? (r.debutTurn ? `${window.GameData.turnToDateLabel(r.debutTurn)}にメジャーデビュー` : 'メジャーデビュー')
@@ -1636,7 +1696,7 @@ function songLifecycleList() {
   return html;
 }
 
-let recordingState = { type: null, selectedSongs: [], price: null, members: [], studio: 'a', producer: false };
+let recordingState = { type: null, selectedSongs: [], price: null, members: [], guests: [], studio: 'a', producer: false };
 
 const RECORDING_PHASE_CONFIG = {
   drums: { label: 'ドラムをレコーディング中...', frames: ['drum', 'drum_smile'] },
@@ -1695,6 +1755,24 @@ function producerToggleRow() {
   </div>`;
 }
 
+// 親密度MAXのたくま・りょーぺはレコーディングにゲスト参加してもらえる
+// (ライブのサポートメンバーには入れない)
+function guestToggleRows() {
+  const cands = GameActions.recordGuestCandidates();
+  if (!cands.length) return '';
+  const cost = window.GameData.RECORD_GUEST_COST;
+  return cands.map(f => {
+    const checked = (recordingState.guests || []).includes(f.id);
+    const chars = window.MEMBER_CHARS && window.MEMBER_CHARS[f.id];
+    const charSrc = chars ? chars.idle : window.RECORDING_CHARS.vocal1;
+    return `<div class="row ${checked ? 'active' : ''}" onclick="toggleRecordingGuest('${f.id}')">
+      ${thumbImg(charSrc)}
+      <div class="row-text"><p class="row-title">${f.name}(${f.bandName})</p><p class="row-sub">¥${cost.toLocaleString()} / 完成度が大きくアップ</p></div>
+      <span class="row-value ${checked ? 'gold' : ''}">${checked ? '参加' : ''}</span>
+    </div>`;
+  }).join('');
+}
+
 function studioToggleRows() {
   return window.GameData.STUDIOS.map(st => {
     const checked = recordingState.studio === st.key;
@@ -1723,7 +1801,7 @@ function screenRecording() {
     const enough = t => unused.length >= t.minSongs;
     const typeCards = window.GameData.CD_TYPES.map(t => `
       <button class="cd-type-card ${enough(t) ? '' : 'cd-type-locked'}" ${enough(t) ? '' : 'disabled'}
-        onclick="recordingState={type:'${t.key}',selectedSongs:[],price:${t.priceMin},members:[],studio:'a',producer:false};render();">
+        onclick="recordingState={type:'${t.key}',selectedSongs:[],price:${t.priceMin},members:[],guests:[],studio:'a',producer:false};render();">
         <span class="cd-type-disc"><span class="cd-type-hole"></span></span>
         <span class="cd-type-text">
           <span class="cd-type-name">${t.name}</span>
@@ -1764,7 +1842,9 @@ function screenRecording() {
 
   const memberCost = recordingState.members.length * window.GameData.MEMBER_COST;
   const producerCost = recordingState.producer ? window.GameData.PRODUCER_COST : 0;
-  const cost = selected.length * studio.costPerSong + memberCost + producerCost;
+  const guestCost = (recordingState.guests || []).length * window.GameData.RECORD_GUEST_COST;
+  const cost = selected.length * studio.costPerSong + memberCost + producerCost + guestCost;
+  const guestRows = guestToggleRows();
   const canProduce = selected.length >= type.minSongs && selected.length <= type.maxSongs;
   const price = recordingState.price || type.priceMin;
 
@@ -1777,6 +1857,7 @@ function screenRecording() {
      <div class="list">${memberToggleRows(recordingState.members, 'toggleRecordingMember')}</div>
      <p class="section-label">プロデューサーを起用する(任意)</p>
      <div class="list">${producerToggleRow()}</div>
+     ${guestRows ? `<p class="section-label">ゲストを呼ぶ(親密度MAXのフレンドのみ)</p><div class="list">${guestRows}</div>` : ''}
      <div style="padding:10px 14px 0;">
        <p class="section-label" style="padding:0 0 4px;">CDタイトル(空欄でランダム)</p>
        <div style="display:flex;gap:6px;">
@@ -1790,14 +1871,14 @@ function screenRecording() {
          oninput="recordingState.price=parseInt(this.value);document.getElementById('priceLabel').innerText='¥'+parseInt(this.value).toLocaleString();"
          style="width:100%;" />
      </div>
-     <div style="padding:10px 14px 0;"><p class="row-sub" style="text-align:center;">制作費用: ¥${cost.toLocaleString()}(${studio.name} ¥${studio.costPerSong.toLocaleString()}×${selected.length} + メンバー¥${memberCost.toLocaleString()} + プロデューサー¥${producerCost.toLocaleString()})</p></div>
+     <div style="padding:10px 14px 0;"><p class="row-sub" style="text-align:center;">制作費用: ¥${cost.toLocaleString()}(${studio.name} ¥${studio.costPerSong.toLocaleString()}×${selected.length} + メンバー¥${memberCost.toLocaleString()} + プロデューサー¥${producerCost.toLocaleString()}${guestCost ? ` + ゲスト¥${guestCost.toLocaleString()}` : ''})</p></div>
      <div style="padding:8px 14px 0;"><button class="rest-btn" ${canProduce ? '' : 'disabled'} onclick="confirmProduceCD()">この内容で制作する</button></div>
-     <div style="padding:8px 14px 0;"><button class="genre-btn" style="width:100%;" onclick="recordingState={type:null,selectedSongs:[],price:null,members:[],studio:'a',producer:false};render();">CD種別を選び直す</button></div>
+     <div style="padding:8px 14px 0;"><button class="genre-btn" style="width:100%;" onclick="recordingState={type:null,selectedSongs:[],price:null,members:[],guests:[],studio:'a',producer:false};render();">CD種別を選び直す</button></div>
      ${logBox()}`;
 }
 
 const RECORDING_PART_HEIGHT = { drums: 175, bass: 140, keyboard: 148, guitar: 148, vocal: 148 };
-const PRODUCER_HEIGHT = 155;
+const PRODUCER_HEIGHT = 120;
 
 function screenRecordingSession() {
   const rs = recordingSessionState;
@@ -1808,11 +1889,19 @@ function screenRecordingSession() {
   const producerHtml = recordingState.producer
     ? `<img src="${window.RECORDING_CHARS.producer}" class="recording-producer-img" style="height:${PRODUCER_HEIGHT}px;" />`
     : '';
+  const guestIds = (rs.pendingParams && rs.pendingParams.guests) || [];
+  const guestHtml = guestIds.map(id => {
+    const chars = window.MEMBER_CHARS && window.MEMBER_CHARS[id];
+    if (!chars) return '';
+    const src = Array.isArray(chars.live) && chars.live.length ? chars.live[rs.frame % chars.live.length] : chars.idle;
+    return `<img src="${src}" class="recording-guest-img" />`;
+  }).join('');
   return `
     <div class="header"><span>レコーディング中</span></div>
     <div class="recording-session-bg" style="background-image:url('${bg}')">
       ${bgHud()}
       ${producerHtml}
+      <div class="recording-guest-row">${guestHtml}</div>
       <img id="recordingCharImg" src="${recordingPhaseImg(phaseKey, rs.frame)}" class="recording-char-img" style="height:${charHeight}px;" />
     </div>
     <div class="progress-card" style="margin:10px 14px;">
@@ -1840,6 +1929,13 @@ function toggleRecordingMember(key) {
   render();
 }
 
+function toggleRecordingGuest(id) {
+  recordingState.guests = recordingState.guests || [];
+  const idx = recordingState.guests.indexOf(id);
+  if (idx >= 0) { recordingState.guests.splice(idx, 1); } else { recordingState.guests.push(id); }
+  render();
+}
+
 function confirmProduceCD() {
   const titleField = document.getElementById('cdTitleField');
   const title = titleField ? titleField.value : '';
@@ -1849,8 +1945,9 @@ function confirmProduceCD() {
   const studio = window.GameData.STUDIOS.find(st => st.key === recordingState.studio) || window.GameData.STUDIOS[0];
   const memberCost = recordingState.members.length * window.GameData.MEMBER_COST;
   const producerCost = recordingState.producer ? window.GameData.PRODUCER_COST : 0;
+  const guestCost = (recordingState.guests || []).length * window.GameData.RECORD_GUEST_COST;
   const recordingBaseCost = recordingState.selectedSongs.length * studio.costPerSong;
-  const totalCost = Math.round(recordingBaseCost * window.GameData.recordingCostMult()) + memberCost + producerCost;
+  const totalCost = Math.round(recordingBaseCost * window.GameData.recordingCostMult()) + memberCost + producerCost + guestCost;
   if (s.money < totalCost) {
     showInsufficientFundsToast();
     return;
@@ -1873,6 +1970,7 @@ function confirmProduceCD() {
       members: recordingState.members,
       studio: recordingState.studio,
       producer: recordingState.producer,
+      guests: (recordingState.guests || []).slice(),
     },
   };
   render();
@@ -1909,8 +2007,8 @@ function runRecordingPhase() {
 function finishRecordingSession() {
   const p = recordingSessionState.pendingParams;
   recordingSessionState = { active: false, phases: [], phaseIndex: 0, frame: 0, pendingParams: null };
-  recordingState = { type: null, selectedSongs: [], price: null, members: [], studio: 'a', producer: false };
-  GameActions.produceCD(p.type, p.songIds, p.price, p.title, p.members, p.studio, p.producer);
+  recordingState = { type: null, selectedSongs: [], price: null, members: [], guests: [], studio: 'a', producer: false };
+  GameActions.produceCD(p.type, p.songIds, p.price, p.title, p.members, p.studio, p.producer, p.guests);
 }
 
 let liveFlowState = { confirming: false, promoting: false, members: [], venueKey: null };
@@ -2785,6 +2883,7 @@ function screenFriend() {
           ${canInvite
             ? `<button class="friend-invite-btn" onclick="inviteGuestScene('${f.id}')">対バンに誘う</button>`
             : `<span class="friend-invite-note">${inviteReason}</span>`}
+          ${GameActions.canGuestRecord(f.id) ? '<span class="friend-invite-note friend-invite-note-gold">レコーディングにも呼べる</span>' : ''}
         </div>` : ''}
       </div>`;
   };
@@ -2886,6 +2985,8 @@ function superAbilityPanel(friend) {
   } else if (st.reason === 'intimacy') {
     footer = `<div class="super-bar"><div class="super-bar-fill" style="width:${Math.min(100, iv / need * 100)}%;"></div></div>
       <p class="super-note">親密度 ${iv} / ${need} — もっと仲良くなると習得できる</p>`;
+  } else if (st.reason === 'already_have_other') {
+    footer = `<p class="super-note super-note-short">すでに「${st.otherLabel}」を習得しています(絆の特殊能力は1つだけ)</p>`;
   } else if (st.ok) {
     footer = `<button class="super-learn-btn" onclick="learnSuperAbilityUI('${friend.id}')">「${label}」を習得する</button>`;
   } else {
@@ -4070,6 +4171,14 @@ function statRankRows(s) {
   }).join('');
 }
 
+// 能力のランクに応じたCSSクラス。通常=青、金=金、超特殊=虹。
+function abilityToneClass(def, tier) {
+  if (def && def.negative) return 'ability-tone-bad';
+  if (def && def.super) return 'ability-tone-super';
+  if (tier === 'gold') return 'ability-tone-gold';
+  return 'ability-tone-normal';
+}
+
 function abilityRows(s) {
   return Object.entries(StatsEngine.ABILITIES).map(([key, def]) => {
     const owned = (s.abilities || []).find(a => a.key === key);
@@ -4099,7 +4208,7 @@ function abilityRows(s) {
       actionHtml = `<p class="rank-stat-sub">これ以上の段階はありません</p>`;
     }
     return `
-      <div class="ability-row ${isGold ? 'ability-gold' : ''} ${def.negative ? 'ability-negative' : ''}">
+      <div class="ability-row ${abilityToneClass(def, owned ? owned.tier : null)} ${isGold ? 'ability-gold' : ''} ${def.negative ? 'ability-negative' : ''}">
         <div class="ability-row-top"><span class="ability-name">${def.name}</span><span class="ability-current">${currentLabel}</span></div>
         <p class="ability-effect">${def.effect}</p>
         ${actionHtml}
@@ -4131,7 +4240,7 @@ function screenStatus() {
             const def = StatsEngine.ABILITIES[a.key];
             const tierInfo = def ? def.tiers.find(t => t.tier === a.tier) : null;
             const label = tierInfo ? tierInfo.label : (def ? def.name : a.key);
-            return `<span class="ability-chip">${label}</span>`;
+            return `<span class="ability-chip ${abilityToneClass(def, a.tier)}">${label}</span>`;
           }).join('')
         : '<p class="empty" style="text-align:left;">まだ特殊能力を習得していません</p>'}
     </div>
@@ -4537,7 +4646,7 @@ function screenEndingTitleFull() {
           <p class="ending-kicker">2 YEARS OF</p>
           <div class="ending-rule"></div>
           <p class="ending-band-name">${s.bandName || 'タケルバンド'}</p>
-          <p class="ending-title-sub">〜 2年間の軌跡 〜</p>
+          <p class="ending-title-sub">〜 2年半の軌跡 〜</p>
           <p class="ending-title-years">${window.GameData.turnToDateLabel(1)} 〜 ${window.GameData.turnToDateLabel(window.GameData.TOTAL_TURNS)}</p>
           <p class="ending-title-venue">最終到達 ${window.GameData.pickVenueForPlayer().name}</p>
         </div>
@@ -4555,6 +4664,8 @@ function goEndingAllocate() {
 }
 
 // ---- 2. 残った経験点の振り直し ----
+let endingAllocTab = 'stats';
+
 function screenEndingAllocateFull() {
   const s = window.GameState;
   const expPoolHtml = StatsEngine.EXP_CATEGORIES.map(c => `
@@ -4565,16 +4676,22 @@ function screenEndingAllocateFull() {
       ${endingBackdropHtml()}
       <div class="ending-layer">
         <div class="ending-header">
-          <span class="ending-header-main">2年間のサクセス、お疲れ様！</span>
+          <span class="ending-header-main">2年半のサクセス、お疲れ様！</span>
           <span class="ending-header-sub">FINAL</span>
         </div>
         <!-- screen-body(フェードイン)は付けない。+1/+10を押すたびにrender()で作り直されて
              一覧全体が毎回フェードし直してしまうため。入場時は暗転が覆っているので不要。 -->
         <div class="ending-allocate-body">
-          <p class="howto-intro">最後に、残った経験点でステータスを振り直せます。</p>
+          <p class="howto-intro">最後に、残った経験点でステータスと特殊能力を取れます。</p>
           <p class="ending-section-label">現在の経験点</p>
           <div class="exp-pool-row">${expPoolHtml}</div>
-          <div class="list" style="padding:0 14px;">${statRankRows(s)}</div>
+          <div class="status-tabs" style="margin:6px 14px 10px;">
+            <button class="${endingAllocTab === 'stats' ? 'tab-active' : ''}" onclick="endingAllocTab='stats';render();">ステータス</button>
+            <button class="${endingAllocTab === 'ability' ? 'tab-active' : ''}" onclick="endingAllocTab='ability';render();">特殊能力</button>
+          </div>
+          <div class="list" style="padding:0 14px;">${
+            endingAllocTab === 'ability' ? abilityRows(s) : statRankRows(s)
+          }</div>
           <div style="padding:0 14px;">
             <button class="rest-btn ending-finish-btn" onclick="goEndingSummary()">エンディングへ進む</button>
           </div>
@@ -4694,7 +4811,11 @@ function saveCompletedRun(overallRank, overallScore, releasedCount, totalUnitsSo
     abilities: (s.abilities || []).map(a => {
       const def = StatsEngine.ABILITIES[a.key];
       const tier = def ? def.tiers.find(t => t.tier === a.tier) : null;
-      return { label: tier ? tier.label : (def ? def.name : a.key), negative: !!(def && def.negative) };
+      return {
+        label: tier ? tier.label : (def ? def.name : a.key),
+        negative: !!(def && def.negative),
+        tone: abilityToneClass(def, a.tier),
+      };
     }),
     completedAt: Date.now(),
   };
@@ -4712,8 +4833,17 @@ function saveCompletedRun(overallRank, overallScore, releasedCount, totalUnitsSo
       money: Math.round(s.money), level: overallScore,
       releases: (s.releases || []).map(r => ({ title: r.title, totalSold: r.totalSold, released: r.released })),
     });
-    // 1回のサクセスの成績を、ランキングと「所属バンド」の元データとして1件ずつ残す
-    window.FirebaseSvc.saveCompletedRun(record);
+    // 1回のサクセスの成績を、ランキングと「所属バンド」の元データとして1件ずつ残す。
+    // 返ってくるIDをローカルの記録にも控えておくと、あとで両方まとめて消せる。
+    window.FirebaseSvc.saveCompletedRun(record).then(runId => {
+      if (!runId) return;
+      try {
+        const key = 'takeru_completed_runs';
+        const runs = JSON.parse(localStorage.getItem(key) || '[]');
+        const mine = runs.find(r => r.completedAt === record.completedAt);
+        if (mine) { mine.remoteId = runId; localStorage.setItem(key, JSON.stringify(runs)); }
+      } catch (e) { /* 保存できない環境は無視 */ }
+    });
     rankingData = null;    // 次回ランキング画面を開いた時に最新の状態を取り直す
     majorBandsData = null; // 事務所画面の所属バンド一覧も取り直す
   }
@@ -5208,6 +5338,25 @@ function showLiveFinishedDialogue(info) {
       ? { text: `利益が${yen(info.profit)}増えた`, type: 'plus' }
       : { text: `${yen(Math.abs(info.profit))}の赤字になった`, type: 'minus' },
   ];
+  // 対バンの相手がいない普通のライブは、打ち上げが無い日もある(50%)。
+  // その場合はまっすぐ帰るので、少しだけ体力が戻る。
+  const hasParty = !!info.guestName || Math.random() < 0.5;
+  if (!hasParty) {
+    const s2 = window.GameState;
+    const maxHealth = s2.maxHealthMult || 100;
+    const before = s2.health;
+    s2.health = Math.min(maxHealth, s2.health + 10);
+    const healed = Math.round(s2.health - before);
+    resultSegments.push({ text: '今日は打ち上げなし。まっすぐ帰って休んだ', type: 'neutral' });
+    if (healed > 0) resultSegments.push({ text: `体力が${healed}回復した`, type: 'plus' });
+    showResultDialogue(
+      [{ src: idlePortrait(), name: window.GameState.playerName || 'タケル', active: true }],
+      window.GameState.playerName || 'タケル',
+      resultSegments, null, window.VENUE_OUTSIDE_BG, 'live',
+      closeToHomeAnimated
+    );
+    return;
+  }
   // 吹き出しに収まる行数で区切る(1ページに詰め込むと文字が隠れてしまうため)
   const resultPages = segmentsToPages(resultSegments);
   const page2 = `<p class="dialogue-line">打ち上げがあるみたいだ</p><p class="dialogue-line">参加する？</p>`;
@@ -5358,7 +5507,14 @@ function finishAfterpartyFlow() {
         : { text: `${partnerFriend.name}との親密度が${Math.abs(result.tier.intimacy)}下がった`, type: 'minus' });
     }
   }
-  if (result.drinks >= 10) segments.push({ text: '打ち上げ◯のコツをつかんだ！', type: 'plus' });
+  const gsAfter = window.GameState;
+  if (gsAfter.afterpartyKnackGained) segments.push({ text: '打ち上げ◯のコツをつかんだ！(習得に必要な経験点が半分になった)', type: 'plus' });
+  if (gsAfter.justKnack) {
+    segments.push({ text: `10杯飲み切るのを${window.GameData.AFTERPARTY_KING_TIMES}回達成！金特殊能力「${gsAfter.justKnack.label}」のコツをつかんだ！`, type: 'money' });
+    gsAfter.justKnack = null;
+  } else if (result.drinks >= 10 && !(gsAfter.knacks || {}).afterpartyKing) {
+    segments.push({ text: `10杯飲み切った(${gsAfter.tenDrinkCount}/${window.GameData.AFTERPARTY_KING_TIMES})`, type: 'plus' });
+  }
   if (result.hungover) segments.push({ text: '二日酔いになってしまった…翌日は体調が優れない', type: 'minus' });
 
   const finalImg = result.vomited ? window.DRINK_IMAGES.vomit : (result.drinks > 0 ? window.DRINK_IMAGES.d3 : window.DRINK_IMAGES.d1);
