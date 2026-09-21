@@ -1646,7 +1646,12 @@ function runPracticeLoading() {
     const useCoupon = practiceScreenState.useCoupon;
     playSfx('complete');
     const bgKey = PRACTICE_BG_MAP[key] || 'small';
+    // 練習レベルは「練習の種類ごと」に別々なので、どれをLvいくつでやったのかを
+    // 結果にも出す(他の練習でレベルを上げても、この練習には効かない)
+    const pvBefore = window.GameData.practicePreview(key);
+    const menuBefore = window.GameData.PRACTICE_MENUS.find(m => m.key === key);
     const lines = collectNewLogLines(() => GameActions.doPracticeSession(key, useCoupon));
+    lines.unshift({ text: `${menuBefore.name} Lv.${pvBefore.level}(経験点 ×${pvBefore.levelMult})`, type: 'neutral' });
     window.GameState.justPracticeResult = null;
     practiceScreenState = { selected: null, phase: 'confirm', useCoupon: false, result: null };
     playCompleteWipeTransition(() => {
@@ -5804,6 +5809,7 @@ function resolveRyoheiRP3Ui(returned) {
   const line = returned
     ? 'りょーぺ「まさか本当に返してもらえると思わなかった、、」'
     : 'りょーぺ「お前！なんでだよ！返すまで言い続けるからな！」';
+  // 断った場合はまた催促してくる
   const segments = [{ text: line, type: 'neutral' }];
   if (info.cost) segments.push({ text: `${yen(info.cost)}を返した`, type: 'minus' });
   Object.entries(info.appliedExp || {}).forEach(([cat, v]) => {

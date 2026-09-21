@@ -53,7 +53,7 @@ const state = {
   justRyoheiCollabDay: false,
   ryoheiPendingOffer: null,
   ryoheiJustBecameFriend: false,
-  ryoheiEvents: { rp1Done: false, rp3Done: false, rp4Done: false, firstCollabScheduled: false, firstCollabTurn: null, firstCollabAnnounced: false },
+  ryoheiEvents: { rp1Done: false, rp3Done: false, rp3NextTurn: 0, rp4Done: false, firstCollabScheduled: false, firstCollabTurn: null, firstCollabAnnounced: false },
   takumaPendingOffer: null,
   justTakumaEvent: null, // 'TKM1'|'TKM2'|'TKM3'
   justTakumaCollabDay: false,
@@ -748,6 +748,7 @@ function checkTakumaMeeting() {
 
 // 10杯飲み切るのをこの回数こなすと「打ち上げ王」のコツが手に入る
 const AFTERPARTY_KING_TIMES = 5;
+const RP3_NAG_INTERVAL = 4;   // 借金を踏み倒した後、また催促してくるまでの週数
 
 // ===== フレンドから受け継ぐコツ =====
 // 一緒に演奏すると、そのキャラの得意なことが少しずつ身につく。
@@ -949,7 +950,8 @@ const EVENT_POOL = [
 
   // --- 物語のイベント(前提を満たしている間だけ候補に入る) ---
   { key: 'ryoheiRP3', weight: 9,
-    cond: () => state.ryoheiEvents.rp4Done && !state.ryoheiEvents.rp3Done,
+    cond: () => state.ryoheiEvents.rp4Done && !state.ryoheiEvents.rp3Done
+      && state.turn >= (state.ryoheiEvents.rp3NextTurn || 0),
     fire: () => { state.ryoheiEvents.rp3Done = true; state.justRyoheiEvent = { key: 'RP3' }; } },
   { key: 'takuma', weight: 9,
     cond: () => !state.takumaEvents.tkm1Done || !state.takumaEvents.tkm2Done || !state.takumaEvents.collabPending,
@@ -1125,6 +1127,9 @@ function resolveRyoheiRP3(returned) {
     appliedExp = grantExp({ men: 30 });
     if (friend) friend.intimacy = Math.max(0, before - 5);
     addLog('りょーぺへの借金を踏み倒した…', 'minus');
+    // 「返すまで言い続けるからな」なので、しばらくするとまた催促してくる
+    state.ryoheiEvents.rp3Done = false;
+    state.ryoheiEvents.rp3NextTurn = state.turn + RP3_NAG_INTERVAL;
   }
   const delta = friend ? (friend.intimacy || 0) - before : 0;
   if (delta > 0) addLog(`りょーぺとの親密度が${delta}上がった`, 'plus');
@@ -2658,7 +2663,7 @@ function resetGameState() {
   state.justRyoheiCollabDay = false;
   state.ryoheiPendingOffer = null;
   state.ryoheiJustBecameFriend = false;
-  state.ryoheiEvents = { rp1Done: false, rp3Done: false, rp4Done: false, firstCollabScheduled: false, firstCollabTurn: null, firstCollabAnnounced: false };
+  state.ryoheiEvents = { rp1Done: false, rp3Done: false, rp3NextTurn: 0, rp4Done: false, firstCollabScheduled: false, firstCollabTurn: null, firstCollabAnnounced: false };
   state.takumaPendingOffer = null;
   state.justTakumaEvent = null;
   state.justTakumaCollabDay = false;
