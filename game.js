@@ -1751,6 +1751,19 @@ function genreMasteryTier(mastery) {
   return tier;
 }
 
+// 作曲画面に出す「完成度の見込み」。実際の計算(finalizeSongProduction)と
+// 同じ式を使う。以前は廃止した旧ステータス(skills)で別計算していて、
+// 画面には12くらいと出るのに実際は70前後できる、という食い違いになっていた。
+function predictSongCompletion(genre) {
+  const st = state.stats || {};
+  const mastery = (state.genreMastery && genre) ? (state.genreMastery[genre] || 0) : 0;
+  const masteryBonus = (mastery / 100) * 18;
+  const base = ((st.compose || 0) * 1.5 + (st.vocal || 0) + (st.play || 0)) / 3 * SONG_STAT_WEIGHT + masteryBonus;
+  const earBonus = 1 + abilityTier('onkan') * 0.05 + abilityTier('rhythm') * 0.03;
+  const mid = hasAbility('focus') ? 5 : 5;   // trendBonusの期待値
+  return Math.max(1, Math.min(100, Math.round((base + mid) * earBonus)));
+}
+
 function finalizeSongProduction() {
   const draft = state.songInProgress;
   const sick = isSickForExp();
@@ -2401,6 +2414,10 @@ function drinkAtAfterparty() {
 // 打ち上げを締めくくる(吐いた/10杯飲みきった/途中でやめた、いずれの場合も呼ぶ)。
 // 飲んだ杯数に応じた成果(経験点・親密度・体力)を確定させ、結果を返す。
 function finishAfterparty() {
+  // 前回の打ち上げの結果が残っていると、今回何も無くても
+  // 「コツがLv.5になった」と出てしまう。毎回ここで消す。
+  state.afterpartyKnackGained = false;
+  state.justKnack = null;
   const ap = state.afterpartyState || { drinks: 0, vomited: false };
   const drinks = ap.drinks;
   const vomited = ap.vomited;
@@ -2821,7 +2838,7 @@ window.GameData = {
   SONG_HEALTH_COST,
   PRACTICE_STAMPS_FOR_COUPON, PRACTICE_COUPON_VALID_TURNS,
   PROMO_MAX_PER_MONTH,
-  getPracticeLevel, PRACTICE_LEVEL_MULTIPLIER, practicePreview, PRACTICE_LEVEL_UP_EVERY,
+  getPracticeLevel, PRACTICE_LEVEL_MULTIPLIER, practicePreview, PRACTICE_LEVEL_UP_EVERY, predictSongCompletion,
   TOTAL_TURNS, WEEKS_PER_MONTH, MONTHS_PER_YEAR, LIVE_INTERVAL_TURNS,
   turnToDate, turnToDateLabel,
   genreMasteryTier, GENRE_MASTERY_TIERS,

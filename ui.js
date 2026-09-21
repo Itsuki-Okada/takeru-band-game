@@ -551,7 +551,8 @@ function syncFirebaseProfile() {
       playerId: s.playerId, playerName: s.playerName, bandName: s.bandName,
       iconUrl: currentIconUrl(),
       fame: Math.round(s.fame), followers: Math.round(s.followers),
-      money: Math.round(s.money), skills: s.skills,
+      money: Math.round(s.money),
+      stats: StatsEngine.STAT_ORDER.reduce((o, k) => { o[k] = Math.round(s.stats[k] || 0); return o; }, {}),
       releases: (s.releases || []).map(r => ({ title: r.title, totalSold: r.totalSold, released: r.released })),
     });
     startFirebaseRealtimeSync();
@@ -581,7 +582,7 @@ function startFirebaseRealtimeSync() {
       fame: f.fame || 0,
       followers: f.followers || 0,
       level: f.level || 1,
-      skills: f.skills || {},
+      stats: f.stats || {},
       releases: f.releases || [],
     }));
     s.friends = [...npcs, ...online];
@@ -1657,10 +1658,8 @@ function runPracticeLoading() {
   }, 3000);
 }
 
-function predictedCompletion() {
-  const s = window.GameState;
-  const base = (s.skills.compose * 1.5 + s.skills.vocal + s.skills.guitar) / 3;
-  return Math.round(base);
+function predictedCompletion(genre) {
+  return window.GameData.predictSongCompletion(genre || (songFlowState && songFlowState.genre));
 }
 
 let songFlowState = { genre: null };
@@ -1981,7 +1980,7 @@ function screenRecording() {
 }
 
 const RECORDING_PART_HEIGHT = { drums: 175, bass: 140, keyboard: 148, guitar: 148, vocal: 148 };
-const PRODUCER_HEIGHT = 120;
+const PRODUCER_HEIGHT = 88;
 
 // 'guest:takuma' のようなフェーズキーから相手のIDを取り出す
 function recordingGuestOf(phaseKey) {
@@ -2008,20 +2007,12 @@ function screenRecordingSession() {
   const producerHtml = recordingState.producer
     ? `<img src="${window.RECORDING_CHARS.producer}" class="recording-producer-img" style="height:${PRODUCER_HEIGHT}px;" />`
     : '';
-  const guestIds = (rs.pendingParams && rs.pendingParams.guests) || [];
-  // 出番中のゲストは主役の位置に出すので、脇には並べない
-  const guestHtml = guestIds.filter(id => id !== guestId).map(id => {
-    const chars = window.MEMBER_CHARS && window.MEMBER_CHARS[id];
-    if (!chars) return '';
-    const src = Array.isArray(chars.live) && chars.live.length ? chars.live[rs.frame % chars.live.length] : chars.idle;
-    return `<img src="${src}" class="recording-guest-img" />`;
-  }).join('');
+
   return `
     <div class="header"><span>レコーディング中</span></div>
     <div class="recording-session-bg" style="background-image:url('${bg}')">
       ${bgHud()}
       ${producerHtml}
-      <div class="recording-guest-row">${guestHtml}</div>
       <img id="recordingCharImg" src="${guestId ? recordingGuestImg(guestId, rs.frame) : recordingPhaseImg(phaseKey, rs.frame)}" class="recording-char-img" style="height:${guestId ? 150 : charHeight}px;" />
     </div>
     <div class="progress-card" style="margin:10px 14px;">
@@ -2549,7 +2540,7 @@ async function refreshRanking(category) {
     fame: p.fame || 0,
     followers: p.followers || 0,
     level: p.level || 1,
-    skills: p.skills || {},
+    stats: p.stats || p.skills || {},
     releases: p.releases || [],
     isPlayer: p.playerId === s.playerId,
   }));
@@ -2625,7 +2616,7 @@ function screenRivalStatus() {
   if (!e) return `<div class="header"><button class="back" onclick="setTab('ranking');">←</button><span>プレイヤー情報</span></div><p class="empty">情報がありません</p>`;
   const s = window.GameState;
   const alreadyFriend = s.friends.some(f => f.playerId === e.playerId);
-  const skillRows = Object.entries(e.skills || {}).map(([k, v]) => `
+  const skillRows = Object.entries(e.stats || e.skills || {}).map(([k, v]) => `
     <div class="statrow">
       <div class="statrow-top"><span>${STAT_LABEL[k] || k}</span><span>${v}</span></div>
       <div class="bar"><div class="bar-fill" style="width:${Math.min(100, v)}%"></div></div>
@@ -2901,7 +2892,7 @@ async function refreshOnlineFriends() {
     fame: f.fame || 0,
     followers: f.followers || 0,
     level: f.level || 1,
-    skills: f.skills || {},
+    stats: f.stats || f.skills || {},
     releases: f.releases || [],
   }));
   s.friends = [...npcs, ...online];
@@ -3242,7 +3233,7 @@ function screenFriendDetail(friend) {
       ${superAbilityPanel(friend)}
     `;
   }
-  const skills = friend.skills || {};
+  const skills = friend.stats || friend.skills || {};
   const releases = friend.releases || [];
   const skillRows = Object.entries(skills).map(([k, v]) => `
     <div class="statrow">
@@ -5753,12 +5744,10 @@ function finishAfterpartyFlow() {
       : { text: `${partnerFriend.name}との親密度が${Math.abs(delta)}下がった`, type: 'minus' });
   });
   const gsAfter = window.GameState;
-  if (gsAfter.afterpartyKnackGained) {
-    const k = gsAfter.afterpartyKnackGained;
-    // 古いセーブでは真偽値で入っているので、その場合は現在のレベルから出し直す
-    const lv = (k && k.level) || StatsEngine.knackLevel(gsAfter, 'afterparty');
-    const off = (k && k.off) || Math.round((1 - StatsEngine.knackDiscount(lv)) * 100);
-    if (lv > 0) segments.push({ text: `打ち上げのコツがLv.${lv}になった！(必要経験点が${off}%引き)`, type: 'plus' });
+  // 今回レベルが上がった時だけ出す(上限に達していれば何も出さない)
+  const knackUp = gsAfter.afterpartyKnackGained;
+  if (knackUp && knackUp.level) {
+    segments.push({ text: `打ち上げのコツがLv.${knackUp.level}になった！(必要経験点が${knackUp.off}%引き)`, type: 'plus' });
   }
   if (gsAfter.justKnack) {
     segments.push({ text: `10杯飲み切るのを${window.GameActions.AFTERPARTY_KING_TIMES}回達成！金特殊能力「${gsAfter.justKnack.label}」のコツをつかんだ！`, type: 'money' });
