@@ -337,6 +337,41 @@ const StatsEngine = (function () {
     dexterity:  { name: '器用',     effect: '各アルバイトで得られる経験点と時給(×1.25)が上がる', unlockType: 'mastery', masteryJob: 'koujou',  tiers: [{ tier: 'normal', label: '器用◯' }] },
   };
 
+  // ===== コツ(knack) =====
+  // コツにはLv1〜5があり、1レベルにつき必要経験点が10%引き。Lv5で半分になる。
+  // 下位のコツを持っていると、金特殊能力・超特殊能力の必要経験点にも同じ割引がかかる。
+  const KNACK_MAX_LEVEL = 5;
+  function knackLevel(state, key) {
+    const v = (state.knacks || {})[key];
+    if (v === true) return KNACK_MAX_LEVEL;      // 旧セーブ(真偽値)は最大レベル扱い
+    const n = Number(v) || 0;
+    return Math.max(0, Math.min(KNACK_MAX_LEVEL, n));
+  }
+  function knackDiscount(level) {
+    return 1 - Math.max(0, Math.min(KNACK_MAX_LEVEL, level)) * 0.1;
+  }
+  // 持っているコツのうち一番高いレベル(金特殊・超特殊への割引に使う)
+  function bestKnackLevel(state) {
+    const ks = state.knacks || {};
+    return Object.keys(ks).reduce((m, k) => Math.max(m, knackLevel(state, k)), 0);
+  }
+
+  // 次の段階に必要な経験点(割引適用後)。UIの「必要:」表示と習得処理で同じ値を使う。
+  function abilityNextCost(state, abilityKey) {
+    const def = ABILITIES[abilityKey];
+    if (!def) return null;
+    const owned = (state.abilities || []).find(a => a.key === abilityKey);
+    const nextTierIndex = owned ? def.tiers.findIndex(t => t.tier === owned.tier) + 1 : 0;
+    const nextTier = def.tiers[nextTierIndex];
+    if (!nextTier || !nextTier.cost) return null;
+    let lv = def.knackKey ? knackLevel(state, def.knackKey) : 0;
+    if (nextTier.tier === 'gold') lv = Math.max(lv, bestKnackLevel(state));
+    const discount = costMultiplier(state) * knackDiscount(lv);
+    const cost = {};
+    Object.keys(nextTier.cost).forEach(c => { cost[c] = Math.max(1, Math.round(nextTier.cost[c] * discount)); });
+    return { cost, knackLevel: lv, off: Math.round((1 - knackDiscount(lv)) * 100), tier: nextTier.tier, label: nextTier.label };
+  }
+
   function tryUnlockAbility(state, abilityKey) {
     const def = ABILITIES[abilityKey];
     if (!def) return { ok: false, reason: 'unknown_ability' };
@@ -362,8 +397,10 @@ const StatsEngine = (function () {
       }
       const rawCost = nextTier.cost || {};
       let discount = costMultiplier(state);
-      // コツを掴んでいる能力は必要経験点が半分になる
-      if (def.knackKey && (state.knacks || {})[def.knackKey]) discount *= 0.5;
+      // その能力のコツ。金特殊(gold)は下位のコツでも割引が効く。
+      let lv = def.knackKey ? knackLevel(state, def.knackKey) : 0;
+      if (nextTier.tier === 'gold') lv = Math.max(lv, bestKnackLevel(state));
+      discount *= knackDiscount(lv);
       const cost = {};
       Object.keys(rawCost).forEach(c => { cost[c] = Math.max(1, Math.round(rawCost[c] * discount)); });
       const shortage = Object.keys(cost).filter(c => (state.expPool[c] || 0) < cost[c]);
@@ -412,7 +449,8 @@ const StatsEngine = (function () {
     const def = ABILITIES[key];
     if (!def || !def.tiers[0].cost) return {};
     const raw = def.tiers[0].cost;
-    const discount = costMultiplier(state);
+    // 超特殊能力も、持っているコツのぶんだけ安くなる
+    const discount = costMultiplier(state) * knackDiscount(bestKnackLevel(state));
     const out = {};
     Object.keys(raw).forEach(c => { out[c] = Math.max(1, Math.round(raw[c] * discount)); });
     return out;
@@ -514,6 +552,7 @@ const StatsEngine = (function () {
     createEmptyExpPool, createEmptyStats, createEmptyInvested,
     getRank, getRankIndex, pointCost, setCostCurve,
     gainExp, getExpMultiplier, applyMultiplier,
+    KNACK_MAX_LEVEL, knackLevel, knackDiscount, bestKnackLevel, abilityNextCost,
     raiseStat, calcOverallScore, getOverallRank,
     tryUnlockAbility, hasSense, grantRandomNegative, rollStartingAbility,
     FRIENDSHIP_ABILITY_REQUIRED, superAbilityFor, canLearnSuperAbility, learnSuperAbility,

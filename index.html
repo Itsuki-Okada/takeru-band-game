@@ -538,6 +538,95 @@
     margin-left: 6px; font-size: 10.5px; font-weight: 800;
     color: #E8C468; opacity: 0.95;
   }
+  /* ===== 練習の決定画面 ===== */
+  .pr-hero {
+    position: relative; margin: 8px 14px 4px;
+    height: 190px; border-radius: 14px; overflow: hidden;
+    background-size: cover; background-position: center;
+    border: 1px solid rgba(232,196,104,0.28);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+  }
+  .pr-hero::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,10,14,0.55) 0%, rgba(10,10,14,0.1) 42%, rgba(10,10,14,0.88) 100%);
+  }
+  .pr-hero-plate { position: absolute; left: 12px; right: 12px; bottom: 10px; z-index: 2; }
+  .pr-hero-name {
+    margin: 0 0 6px; font-size: 19px; font-weight: 900; color: #F5EEDD;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+  }
+  .pr-lv-row { display: flex; align-items: center; gap: 8px; }
+  .pr-lv-badge {
+    font-size: 12px; font-weight: 900; color: #1a1a22;
+    background: linear-gradient(135deg, #F0D98A, #E8C468);
+    padding: 2px 9px; border-radius: 999px; flex: none;
+  }
+  .pr-lv-pips { display: flex; gap: 3px; flex: none; }
+  .pr-lv-pip {
+    width: 15px; height: 5px; border-radius: 3px;
+    background: rgba(255,255,255,0.22);
+  }
+  .pr-lv-pip-on { background: #E8C468; box-shadow: 0 0 6px rgba(232,196,104,0.6); }
+  .pr-lv-mult {
+    margin-left: auto; font-size: 11.5px; font-weight: 800; color: #E8C468;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  }
+  .pr-exp-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 7px; padding: 0 14px;
+  }
+  .pr-exp-chip {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 11px; border-radius: 11px;
+    background: rgba(255,255,255,0.045);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-left-width: 3px;
+  }
+  .pr-exp-str { border-left-color: #E06A6A; }
+  .pr-exp-ski { border-left-color: #6EA8E0; }
+  .pr-exp-int { border-left-color: #8FBF6A; }
+  .pr-exp-men { border-left-color: #B07AC7; }
+  .pr-exp-name { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.72); }
+  .pr-exp-val { font-size: 16px; font-weight: 900; color: #F0E6D2; }
+  .pr-exp-tilde { font-size: 10px; font-weight: 700; opacity: 0.55; margin: 0 1px; }
+  .pr-stat-grid { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px; }
+  .pr-stat-chip {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 10px; border-radius: 999px;
+    background: rgba(232,196,104,0.09);
+    border: 1px solid rgba(232,196,104,0.3);
+  }
+  .pr-stat-icon { font-size: 12px; }
+  .pr-stat-name { font-size: 11.5px; font-weight: 700; color: rgba(255,255,255,0.8); }
+  .pr-stat-val { font-size: 12px; font-weight: 900; color: #E8C468; }
+  .pr-cost-row { display: flex; gap: 7px; padding: 12px 14px 0; }
+  .pr-cost-cell {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 9px 4px; border-radius: 11px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .pr-cost-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.5); }
+  .pr-cost-val { font-size: 15px; font-weight: 900; color: #F0E6D2; }
+  .pr-cost-minus { color: #E06A6A; }
+  .pr-cost-slash { font-size: 11px; font-weight: 700; opacity: 0.55; }
+  .pr-cost-sub { font-size: 9.5px; font-weight: 600; color: rgba(255,255,255,0.45); text-align: center; }
+  .pr-notes { padding: 10px 14px 0; display: flex; flex-direction: column; gap: 4px; }
+  .pr-note {
+    margin: 0; font-size: 11.5px; font-weight: 700;
+    padding-left: 14px; position: relative;
+  }
+  .pr-note::before { content: '•'; position: absolute; left: 3px; }
+  .pr-note-good { color: #E8C468; }
+  .pr-note-info { color: rgba(255,255,255,0.5); }
+  .pr-note-bad { color: #E06A6A; }
+  .knack-off {
+    display: inline-block; margin-left: 4px;
+    font-size: 10px; font-weight: 800; color: #E8C468;
+    background: rgba(232,196,104,0.14);
+    border: 1px solid rgba(232,196,104,0.4);
+    border-radius: 999px; padding: 1px 6px;
+  }
   .recording-guest-row {
     position: absolute;
     bottom: 4%;
@@ -3150,20 +3239,20 @@
       measurementId: "G-3FCH2Y6VSE",
     };
   </script>
-  <script>window.APP_VERSION = "115";</script>
-  <script src="firebase-service.js?v=115"></script>
-  <script src="icons.js?v=115"></script>
-  <script src="stats-engine.js?v=115"></script>
+  <script>window.APP_VERSION = "117";</script>
+  <script src="firebase-service.js?v=117"></script>
+  <script src="icons.js?v=117"></script>
+  <script src="stats-engine.js?v=117"></script>
   <!-- 効果音(WebAudioで合成。音声ファイルは持たない) -->
-  <script src="sfx.js?v=115"></script>
-  <script src="game.js?v=115"></script>
-  <script src="ui.js?v=115"></script>
+  <script src="sfx.js?v=117"></script>
+  <script src="game.js?v=117"></script>
+  <script src="ui.js?v=117"></script>
   <!-- エンディングだけを確認するためのプレビュー(index.html?ending=1)。
        パラメータが無ければ何もしない。不要になればこの1行とending-preview.jsを消すだけでよい。 -->
-  <script src="keiba.js?v=115"></script>
-  <script src="ending-preview.js?v=115"></script>
+  <script src="keiba.js?v=117"></script>
+  <script src="ending-preview.js?v=117"></script>
   <!-- 選択肢のあるイベントだけを確認するためのプレビュー(index.html?event=1)。
        パラメータが無ければ何もしない。不要になればこの1行とevent-preview.jsを消すだけでよい。 -->
-  <script src="event-preview.js?v=115"></script>
+  <script src="event-preview.js?v=117"></script>
 </body>
 </html>

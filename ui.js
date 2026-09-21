@@ -1508,15 +1508,92 @@ function practiceSessionScreen() {
   }
 
   // confirm
-  const couponValid = s.practiceCoupon && s.turn <= s.practiceCoupon.expiryTurn;
+  return practiceConfirmScreen(menu);
+}
+
+const PRACTICE_STAT_ICON = { vocal: '🎤', guitar: '🎸', compose: '🎼', live: '🔥', performance: '✨' };
+
+// 練習の決定画面。何がどれだけ伸びるのかを、始める前に全部見せる。
+function practiceConfirmScreen(menu) {
+  const s = window.GameState;
+  const pv = window.GameData.practicePreview(menu.key);
+  const bgKey = PRACTICE_BG_MAP[menu.key] || 'small';
+
+  const expChips = Object.keys(pv.exp).map(cat => {
+    const [lo, hi] = pv.exp[cat];
+    return `<div class="pr-exp-chip pr-exp-${cat}">
+      <span class="pr-exp-name">${StatsEngine.EXP_CATEGORY_NAMES[cat]}</span>
+      <span class="pr-exp-val">+${lo}<span class="pr-exp-tilde">〜</span>${hi}</span>
+    </div>`;
+  }).join('');
+
+  const statChips = pv.stats.map(k => `
+    <div class="pr-stat-chip">
+      <span class="pr-stat-icon">${PRACTICE_STAT_ICON[k] || '●'}</span>
+      <span class="pr-stat-name">${STAT_LABEL[k] || k}</span>
+      <span class="pr-stat-val">+${pv.skillGain[0]}〜${pv.skillGain[1]}</span>
+    </div>`).join('');
+
+  // レベルのゲージ(次のレベルまであと何回か)
+  const lvPips = Array.from({ length: 5 }, (_, i) =>
+    `<span class="pr-lv-pip ${i < pv.level ? 'pr-lv-pip-on' : ''}"></span>`).join('');
+
+  const notes = [];
+  if (pv.levelUp) notes.push({ t: `この練習でLv.${pv.level}にアップ！経験点が${pv.levelMult}倍に`, c: 'good' });
+  else if (pv.level < 5) notes.push({ t: `あと${pv.toNextLevel}回でLv.${pv.level + 1}`, c: 'info' });
+  else notes.push({ t: 'レベルは最大です', c: 'info' });
+  if (pv.condition === 'cold') notes.push({ t: '風邪ぎみ…獲得量が下がっている', c: 'bad' });
+  if (pv.boredMult < 1) notes.push({ t: `飽き性×で効果が${Math.round(pv.boredMult * 100)}%に落ちている`, c: 'bad' });
+  if (s.health - pv.healthCost <= 50) notes.push({ t: '体力が減ると風邪をひきやすくなる', c: 'bad' });
+  const notesHtml = notes.map(n => `<p class="pr-note pr-note-${n.c}">${n.t}</p>`).join('');
+
+  const canPay = s.money >= (pv.couponValid ? pv.halfCost : pv.cost);
+
   return `
     <div class="header"><button class="back" onclick="practiceScreenState={selected:null,phase:'confirm',useCoupon:false,result:null};render();">←</button><span>${menu.name}</span></div>
-    <div class="progress-card" style="margin:10px 14px;">
-      <p class="progress-title">獲得予定</p>
-      <p class="progress-sub">体力 -${menu.healthCost}%</p>
-      <p class="progress-sub">費用: ¥${menu.cost.toLocaleString()}${couponValid ? '(クーポン利用可)' : ''}</p>
+    <div class="pr-hero" style="background-image:url('${window.PRACTICE_BG[bgKey]}')">
+      ${bgHud()}
+      <div class="pr-hero-plate">
+        <p class="pr-hero-name">${menu.name}</p>
+        <div class="pr-lv-row">
+          <span class="pr-lv-badge">Lv.${pv.level}</span>
+          <span class="pr-lv-pips">${lvPips}</span>
+          <span class="pr-lv-mult">経験点 ×${pv.levelMult}</span>
+        </div>
+      </div>
     </div>
-    <div style="padding:0 14px;"><button class="rest-btn" onclick="startPracticeSession('${menu.key}')">練習を開始する</button></div>
+
+    <p class="section-label">獲得予定の経験点</p>
+    <div class="pr-exp-grid">${expChips}</div>
+
+    <p class="section-label">伸びるステータス</p>
+    <div class="pr-stat-grid">${statChips}</div>
+
+    <div class="pr-cost-row">
+      <div class="pr-cost-cell">
+        <span class="pr-cost-label">費用</span>
+        <span class="pr-cost-val">¥${pv.cost.toLocaleString()}</span>
+        ${pv.couponValid ? `<span class="pr-cost-sub">クーポンで¥${pv.halfCost.toLocaleString()}</span>` : ''}
+      </div>
+      <div class="pr-cost-cell">
+        <span class="pr-cost-label">体力</span>
+        <span class="pr-cost-val pr-cost-minus">-${pv.healthCost}%</span>
+        <span class="pr-cost-sub">${s.health} → ${Math.max(0, s.health - pv.healthCost)}%</span>
+      </div>
+      <div class="pr-cost-cell">
+        <span class="pr-cost-label">スタンプ</span>
+        <span class="pr-cost-val">${pv.stamps}<span class="pr-cost-slash">/${pv.stampsNeeded}</span></span>
+        <span class="pr-cost-sub">${pv.stampsNeeded - pv.stamps}個で半額券</span>
+      </div>
+    </div>
+
+    ${notesHtml ? `<div class="pr-notes">${notesHtml}</div>` : ''}
+
+    <div style="padding:2px 14px 0;">
+      <button class="rest-btn" ${canPay ? '' : 'disabled'} onclick="startPracticeSession('${menu.key}')">
+        ${canPay ? '練習を開始する' : 'お金が足りない'}
+      </button>
+    </div>
   `;
 }
 
@@ -3751,6 +3828,9 @@ function showCollabLiveFinishedDialogue(info) {
     { text: `${info.venueName} / 動員${info.audience.toLocaleString()}人`, type: 'neutral' },
     { text: `知名度が${info.fameGain}増えた`, type: 'plus' },
   ];
+  if (info.collabIntimacyGain > 0) {
+    resultSegments.push({ text: `${info.friendName}との親密度が${info.collabIntimacyGain}上がった`, type: 'plus' });
+  }
   if (info.gala !== undefined) {
     resultSegments.push({ text: `ギャラ${yen(info.gala)}を受け取った`, type: 'money' });
   } else if (info.profit !== undefined) {
@@ -4227,11 +4307,16 @@ function abilityRows(s) {
         can = mastery >= 100;
         costLabel = `アルバイト熟練度MAX(${mastery}/100)`;
       } else {
-        const cost = nextTier.cost || {};
+        // 割引(コツ・センス)を反映した実際の必要経験点を出す
+        const info = StatsEngine.abilityNextCost(s, key);
+        const cost = (info && info.cost) || nextTier.cost || {};
         can = Object.keys(cost).every(c => (s.expPool[c] || 0) >= cost[c]);
         costLabel = Object.entries(cost).map(([c, v]) => `${StatsEngine.EXP_CATEGORY_NAMES[c]}${v}`).join(' ');
+        if (info && info.off > 0) costLabel += ` <span class="knack-off">コツLv.${info.knackLevel} -${info.off}%</span>`;
       }
-      actionHtml = `<button class="rank-up-btn" ${can ? '' : 'disabled'} onclick="unlockAbilityUI('${key}')">${nextTier.label}を習得</button><p class="rank-stat-sub">必要: ${costLabel}</p>`;
+      const knackNeed = nextTier.needsKnack && !(s.knacks || {})[nextTier.needsKnack];
+      if (knackNeed) can = false;
+      actionHtml = `<button class="rank-up-btn" ${can ? '' : 'disabled'} onclick="unlockAbilityUI('${key}')">${nextTier.label}を習得</button><p class="rank-stat-sub">${knackNeed ? 'コツが必要' : `必要: ${costLabel}`}</p>`;
     } else {
       actionHtml = `<p class="rank-stat-sub">これ以上の段階はありません</p>`;
     }
@@ -4302,10 +4387,11 @@ function sectionTitle(title) {
 // 作曲だけは例外的に許可する。
 function liveDayBlockedScreen(actionLabel) {
   const s = window.GameState;
-  const isTakumaCollab = s.takumaEvents && s.takumaEvents.collabAnnounced;
-  const message = isTakumaCollab ? '今日はたくまとの対バンの日。<br>まずは会場へ向かおう。' : '今日は定期ライブの日。<br>まずは会場へ向かおう。';
-  const goAction = isTakumaCollab
-    ? "dialogueState=null;friendOfferFlowState={offer:window.GameState.takumaPendingOffer,members:[]};setTab('friendlive');render();"
+  const collab = pendingCollabToday();
+  const message = collab ? `今日は${collab.name}との対バンの日。<br>まずは会場へ向かおう。` : '今日は定期ライブの日。<br>まずは会場へ向かおう。';
+  const offerVar = collab && collab.who === 'ryohei' ? 'ryoheiPendingOffer' : 'takumaPendingOffer';
+  const goAction = collab
+    ? `dialogueState=null;friendOfferFlowState={offer:window.GameState.${offerVar},members:[]};setTab('friendlive');render();`
     : "closeDialogueAndGoTo('live');";
   return `
     <div class="header"><span>${actionLabel}</span></div>
@@ -4314,10 +4400,27 @@ function liveDayBlockedScreen(actionLabel) {
   `;
 }
 
-// 定期ライブ・たくまとの対バンのどちらか(未消化)が控えているかどうか
+// 今日出る予定の対バン(たくま/りょーぺ)。予約が残っている方を返す。
+// たくま決め打ちにしていると、りょーぺの対バン日にたくまが出てしまう。
+function pendingCollabToday() {
+  const s = window.GameState;
+  const cands = [];
+  if (s.ryoheiEvents && s.ryoheiEvents.firstCollabAnnounced && s.ryoheiPendingOffer) {
+    cands.push({ who: 'ryohei', name: 'りょーぺ', offer: s.ryoheiPendingOffer, turn: s.ryoheiEvents.firstCollabTurn });
+  }
+  if (s.takumaEvents && s.takumaEvents.collabAnnounced && s.takumaPendingOffer) {
+    cands.push({ who: 'takuma', name: 'たくま', offer: s.takumaPendingOffer, turn: s.takumaEvents.collabTurn });
+  }
+  if (cands.length === 0) return null;
+  // 同じ日に重なった場合は、予定日が早い方(＝先に決まっていた方)を優先する
+  cands.sort((a, b) => (a.turn || 0) - (b.turn || 0));
+  return cands[0];
+}
+
+// 定期ライブ・対バンのどちらか(未消化)が控えているかどうか
 function isSpecialLiveDayPending() {
   const s = window.GameState;
-  return !!s.liveDayAnnounced || !!(s.takumaEvents && s.takumaEvents.collabAnnounced);
+  return !!s.liveDayAnnounced || !!pendingCollabToday();
 }
 
 function statChip(label, numericValue, displayValue, cls, key, subLabel) {
@@ -5359,6 +5462,7 @@ function showLiveFinishedDialogue(info) {
   const resultSegments = [
     { text: `${info.venueName}でのライブが終わった！`, type: 'neutral' },
     ...(info.guestName ? [{ text: `${info.guestBand ? info.guestBand + 'の' : ''}${info.guestName}が対バンしてくれた！`, type: 'plus' }] : []),
+    ...(info.guestIntimacyGain > 0 ? [{ text: `${info.guestName}との親密度が${info.guestIntimacyGain}上がった`, type: 'plus' }] : []),
     { text: `動員${info.audience.toLocaleString()}人 / 出来${info.performanceFinal}`, type: 'neutral' },
     { text: `知名度が${info.fameGain}増えた`, type: 'plus' },
     ...expLines,
@@ -5536,12 +5640,13 @@ function finishAfterpartyFlow() {
     }
   }
   const gsAfter = window.GameState;
-  if (gsAfter.afterpartyKnackGained) segments.push({ text: '打ち上げ◯のコツをつかんだ！(習得に必要な経験点が半分になった)', type: 'plus' });
+  if (gsAfter.afterpartyKnackGained) {
+    const k = gsAfter.afterpartyKnackGained;
+    segments.push({ text: `打ち上げのコツがLv.${k.level}になった！(必要経験点が${k.off}%引き)`, type: 'plus' });
+  }
   if (gsAfter.justKnack) {
     segments.push({ text: `10杯飲み切るのを${window.GameActions.AFTERPARTY_KING_TIMES}回達成！金特殊能力「${gsAfter.justKnack.label}」のコツをつかんだ！`, type: 'money' });
     gsAfter.justKnack = null;
-  } else if (result.drinks >= 10 && !(gsAfter.knacks || {}).afterpartyKing) {
-    segments.push({ text: `10杯飲み切った(${gsAfter.tenDrinkCount}/${window.GameActions.AFTERPARTY_KING_TIMES})`, type: 'plus' });
   }
   if (result.hungover) segments.push({ text: '二日酔いになってしまった…翌日は体調が優れない', type: 'minus' });
 

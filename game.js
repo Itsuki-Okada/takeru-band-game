@@ -177,6 +177,45 @@ function getPracticeLevel(key) {
   const count = (state.practiceCount && state.practiceCount[key]) || 0;
   return Math.min(5, 1 + Math.floor(count / PRACTICE_LEVEL_UP_EVERY));
 }
+// 練習の「獲得予定」を実際の計算と同じ式で先に出す。
+// 経験点に掛かる倍率は練習した後のレベルなので、ここでも1回ぶん進めたレベルで見積もる。
+function practicePreview(key) {
+  const menu = PRACTICE_MENUS.find(m => m.key === key);
+  if (!menu) return null;
+  const count = (state.practiceCount && state.practiceCount[key]) || 0;
+  const level = Math.min(5, 1 + Math.floor((count + 1) / PRACTICE_LEVEL_UP_EVERY));
+  const levelUp = level > Math.min(5, 1 + Math.floor(count / PRACTICE_LEVEL_UP_EVERY));
+  const toNextLevel = level >= 5 ? 0 : PRACTICE_LEVEL_UP_EVERY - ((count + 1) % PRACTICE_LEVEL_UP_EVERY || PRACTICE_LEVEL_UP_EVERY);
+  const levelMult = PRACTICE_LEVEL_MULTIPLIER[level - 1];
+  // 飽き性×: 同じ練習を続けると落ちる
+  let boredMult = 1;
+  if (hasAbility('fickle')) {
+    const streak = state.lastPracticeKey === key ? (state.practiceStreak || 0) + 1 : 0;
+    boredMult = Math.max(0.5, 1 - streak * 0.18);
+  }
+  const cm = conditionMult();
+  // grantExp()と同じ倍率(やる気＋体調不良)で見積もる
+  const expMult = StatsEngine.getExpMultiplier(currentMotivationIndex(), isSickForExp());
+  const exp = {};
+  Object.keys(menu.expGain).forEach(cat => {
+    const [lo, hi] = menu.expGain[cat];
+    exp[cat] = [
+      Math.max(0, Math.round(Math.round(lo * levelMult * boredMult) * expMult)),
+      Math.max(0, Math.round(Math.round(hi * levelMult * boredMult) * expMult)),
+    ];
+  });
+  const skillGain = [Math.max(1, Math.round(1 * cm.skill)), Math.max(1, Math.round(3 * cm.skill))];
+  const couponValid = !!(state.practiceCoupon && state.turn <= state.practiceCoupon.expiryTurn);
+  return {
+    key, name: menu.name, level, levelUp, toNextLevel, levelMult, boredMult, expMult,
+    motivation: StatsEngine.MOTIVATION_LEVELS[currentMotivationIndex()],
+    exp, stats: menu.stats.slice(), skillGain,
+    cost: menu.cost, halfCost: Math.round(menu.cost / 2), couponValid,
+    healthCost: menu.healthCost, condition: state.condition,
+    stamps: state.practiceStamps || 0, stampsNeeded: PRACTICE_STAMPS_FOR_COUPON,
+  };
+}
+
 const PRACTICE_STAMPS_FOR_COUPON = 10;
 const PRACTICE_COUPON_VALID_TURNS = 4; // 約1ヶ月(4週)
 
@@ -993,11 +1032,17 @@ function finalizeFriendOfferLive(offer, memberKeys) {
     state.takumaPendingOffer = null;
   }
   // 一緒にステージに立ったぶん、相手との距離が縮まる
+  let collabIntimacyGain = 0;
   {
     const collabFriend = state.friends.find(f => f.id === offer.friendId);
-    if (collabFriend) addIntimacy(collabFriend, COLLAB_INTIMACY_GAIN);
+    if (collabFriend) {
+      const before = collabFriend.intimacy || 0;
+      addIntimacy(collabFriend, COLLAB_INTIMACY_GAIN);
+      collabIntimacyGain = (collabFriend.intimacy || 0) - before;
+      if (collabIntimacyGain > 0) addLog(`${collabFriend.name}との親密度が${collabIntimacyGain}上がった`, 'plus');
+    }
   }
-  const info = { friendId: offer.friendId, friendName: offer.friendName, bandName: offer.bandName, venueName: venue.name, venueKey: venue.key, audience, fameGain, gala: offer.gala, isRyoheiFirstCollab };
+  const info = { collabIntimacyGain, friendId: offer.friendId, friendName: offer.friendName, bandName: offer.bandName, venueName: venue.name, venueKey: venue.key, audience, fameGain, gala: offer.gala, isRyoheiFirstCollab };
   state.justCollabLive = info;
   render();
   return info;
@@ -2171,7 +2216,13 @@ function doLive(memberKeys, opts) {
     guestName: guest ? guest.name : null, guestBand: guest ? guest.bandName : null };
   if (guest) {
     const gf = state.friends.find(x => x.id === guest.id);
-    if (gf) addIntimacy(gf, COLLAB_INTIMACY_GAIN);   // 一緒に出たぶん大きく縮まる
+    if (gf) {
+      const before = gf.intimacy || 0;
+      addIntimacy(gf, COLLAB_INTIMACY_GAIN);   // 一緒に出たぶん大きく縮まる
+      const gained = (gf.intimacy || 0) - before;
+      state.justPlayedLive.guestIntimacyGain = gained;
+      if (gained > 0) addLog(`${gf.name}との親密度が${gained}上がった`, 'plus');
+    }
     addLog(`${guest.name}(${guest.bandName})が対バンしてくれた！`, 'plus');
     state.scheduledGuest = null;
   }
@@ -2279,24 +2330,24 @@ function finishAfterparty() {
     applyHealthCost(Math.abs(tier.health));
   }
 
-  // 10杯飲み切った回数を数える。
-  // 1回目で「打ち上げ◯」のコツ、5回で金ランク「打ち上げ王」のコツが手に入る。
+  // 10杯飲み切るたびに「打ち上げ」のコツのレベルが1ずつ上がる(最大Lv5で必要経験点が半分)。
+  // 5回目には金ランク「打ち上げ王」のコツも手に入る。
   if (drinks >= 10) {
     state.knacks = state.knacks || {};
     state.tenDrinkCount = (state.tenDrinkCount || 0) + 1;
-    // すでに打ち上げ◯を習得済みなら、そのコツはもう要らない
-    const hasAfterparty = (state.abilities || []).some(a => a.key === 'afterparty');
-    if (!state.knacks.afterparty && !hasAfterparty) {
-      state.knacks.afterparty = true;
-      state.afterpartyKnackGained = true;
-      addLog('打ち上げ◯のコツをつかんだ！(習得に必要な経験点が半分になった)', 'plus');
+    const beforeLv = StatsEngine.knackLevel(state, 'afterparty');
+    const afterLv = Math.min(StatsEngine.KNACK_MAX_LEVEL, state.tenDrinkCount);
+    if (afterLv > beforeLv) {
+      state.knacks.afterparty = afterLv;
+      state.afterpartyKnackGained = { level: afterLv, off: Math.round((1 - StatsEngine.knackDiscount(afterLv)) * 100) };
+      addLog(`打ち上げのコツがLv.${afterLv}になった(必要経験点が${state.afterpartyKnackGained.off}%引き)`, 'plus');
+    } else {
+      addLog('10杯飲み切った', 'plus');
     }
     if (state.tenDrinkCount >= AFTERPARTY_KING_TIMES && !state.knacks.afterpartyKing) {
       state.knacks.afterpartyKing = true;
       addLog(`10杯飲み切るのを${AFTERPARTY_KING_TIMES}回達成！「打ち上げ王」のコツをつかんだ`, 'money');
       state.justKnack = { label: '打ち上げ王', note: '金特殊能力「打ち上げ王」が習得できるようになった' };
-    } else if (!state.knacks.afterpartyKing) {
-      addLog(`10杯飲み切った(${state.tenDrinkCount}/${AFTERPARTY_KING_TIMES})`, 'plus');
     }
   }
 
@@ -2519,6 +2570,12 @@ function resetGameState() {
   state.practiceStamps = 0;
   state.practiceCount = {};
   state.practiceCoupon = null;
+  state.lastPracticeKey = null;   // 飽き性×の連続判定を前のサクセスから持ち越さない
+  state.practiceStreak = 0;
+  state.knacks = {};              // コツも前のサクセスから持ち越さない
+  state.tenDrinkCount = 0;
+  state.afterpartyKnackGained = false;
+  state.justKnack = null;
   state.goodsInventory = [];
   state.goodsInvIdSeq = 1;
   state.friends = createInitialFriends();
@@ -2660,7 +2717,7 @@ window.GameData = {
   SONG_HEALTH_COST,
   PRACTICE_STAMPS_FOR_COUPON, PRACTICE_COUPON_VALID_TURNS,
   PROMO_COOLDOWN_TURNS,
-  getPracticeLevel, PRACTICE_LEVEL_MULTIPLIER,
+  getPracticeLevel, PRACTICE_LEVEL_MULTIPLIER, practicePreview, PRACTICE_LEVEL_UP_EVERY,
   TOTAL_TURNS, WEEKS_PER_MONTH, MONTHS_PER_YEAR, LIVE_INTERVAL_TURNS,
   turnToDate, turnToDateLabel,
   genreMasteryTier, GENRE_MASTERY_TIERS,
