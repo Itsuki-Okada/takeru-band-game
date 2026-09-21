@@ -174,6 +174,12 @@ const PRACTICE_MENUS = [
 // 練習レベル(1〜5)による経験点倍率。5回practice実行するごとに1レベル上がる(最大Lv5)。
 // 同じ練習を続けるほど効率が上がるので、練習に寄せた立ち回りがステータスで報われる。
 let PRACTICE_LEVEL_MULTIPLIER = [1, 2.0, 3.25, 4.75, 6.5]; // index 0=Lv1 … 4=Lv5
+// 練習レベルが上がるほど費用も上がる(index 0=Lv1 … 4=Lv5)
+let PRACTICE_LEVEL_COST_MULT = [1, 1.5, 2.2, 3.0, 4.0];
+function practiceCostAtLevel(menu, level) {
+  const mult = PRACTICE_LEVEL_COST_MULT[Math.max(0, Math.min(4, level - 1))] || 1;
+  return Math.round(menu.cost * mult / 100) * 100;
+}
 const PRACTICE_LEVEL_UP_EVERY = 5;
 function getPracticeLevel(key) {
   const count = (state.practiceCount && state.practiceCount[key]) || 0;
@@ -211,7 +217,10 @@ function practicePreview(key) {
     key, name: menu.name, level, levelUp, toNextLevel, levelMult, boredMult, expMult,
     motivation: StatsEngine.MOTIVATION_LEVELS[currentMotivationIndex()],
     exp,
-    cost: menu.cost, halfCost: Math.round(menu.cost / 2), couponValid,
+    cost: practiceCostAtLevel(menu, level),
+    halfCost: Math.round(practiceCostAtLevel(menu, level) / 2),
+    baseCost: menu.cost, costMult: PRACTICE_LEVEL_COST_MULT[Math.max(0, Math.min(4, level - 1))] || 1,
+    couponValid,
     healthCost: menu.healthCost, condition: state.condition,
     stamps: state.practiceStamps || 0, stampsNeeded: PRACTICE_STAMPS_FOR_COUPON,
   };
@@ -1999,16 +2008,14 @@ function doPracticeSession(key, useCoupon) {
   const menu = PRACTICE_MENUS.find(m => m.key === key);
   if (!menu) return;
   const healthBeforePractice = state.health;
+  // 決定画面に出した内容とズレないよう、費用も経験点も表示と同じ関数から取る
+  const pv = practicePreview(key);
   const couponValid = state.practiceCoupon && state.turn <= state.practiceCoupon.expiryTurn;
   const applyCoupon = !!useCoupon && couponValid;
-  const cost = applyCoupon ? Math.round(menu.cost / 2) : menu.cost;
+  const cost = applyCoupon ? pv.halfCost : pv.cost;
   if (state.money < cost) { notifyInsufficientFunds(); render(); return; }
   state.money -= cost;
   if (applyCoupon) state.practiceCoupon = null;
-
-  // 決定画面に出した「獲得予定」とズレないよう、表示と同じ関数で倍率を出し、
-  // その範囲の中で実際の値を決める(表示と実際で別々に計算しない)。
-  const pv = practicePreview(key);
   const prevLevel = getPracticeLevel(key);
 
   state.practiceCount = state.practiceCount || {};
@@ -2848,7 +2855,7 @@ window.GameData = {
   SONG_HEALTH_COST,
   PRACTICE_STAMPS_FOR_COUPON, PRACTICE_COUPON_VALID_TURNS,
   PROMO_MAX_PER_MONTH,
-  getPracticeLevel, PRACTICE_LEVEL_MULTIPLIER, practicePreview, PRACTICE_LEVEL_UP_EVERY, predictSongCompletion,
+  getPracticeLevel, PRACTICE_LEVEL_MULTIPLIER, PRACTICE_LEVEL_COST_MULT, practiceCostAtLevel, practicePreview, PRACTICE_LEVEL_UP_EVERY, predictSongCompletion,
   TOTAL_TURNS, WEEKS_PER_MONTH, MONTHS_PER_YEAR, LIVE_INTERVAL_TURNS,
   turnToDate, turnToDateLabel,
   genreMasteryTier, GENRE_MASTERY_TIERS,

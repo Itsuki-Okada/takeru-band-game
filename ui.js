@@ -1457,7 +1457,7 @@ function screenPractice() {
     return `<div class="job-card" onclick="practiceScreenState={selected:'${m.key}',phase:'confirm',useCoupon:false,result:null};render();">
       <img src="${window.PRACTICE_BG[bgKey]}" class="job-card-img" loading="lazy" decoding="async" />
       <p class="job-card-name">${m.name} <span style="color:#E8C468;">Lv.${lv}</span></p>
-      <p class="job-card-wage">¥${m.cost.toLocaleString()}</p>
+      <p class="job-card-wage">¥${window.GameData.practiceCostAtLevel(m, lv).toLocaleString()}</p>
     </div>`;
   }).join('');
 
@@ -1507,12 +1507,13 @@ function practiceSessionScreen() {
   }
 
   if (phase === 'couponAsk') {
-    const halfCost = Math.round(menu.cost / 2);
+    const pvCoupon = window.GameData.practicePreview(menu.key);
+    const halfCost = pvCoupon.halfCost;
     return `
       <div class="header"><span>${menu.name}</span></div>
       <div class="progress-card" style="margin:10px 14px;">
         <p class="progress-title">半額クーポンを使用しますか？</p>
-        <p class="progress-sub">通常 ¥${menu.cost.toLocaleString()} → クーポン使用時 ¥${halfCost.toLocaleString()}</p>
+        <p class="progress-sub">通常 ¥${pvCoupon.cost.toLocaleString()} → クーポン使用時 ¥${halfCost.toLocaleString()}</p>
         <p class="progress-sub" style="color:#E06A6A;font-weight:700;">クーポン期限: ${turnToDateLabel(s.practiceCoupon.expiryTurn)}まで</p>
       </div>
       <div style="padding:8px 14px 0;"><button class="rest-btn" onclick="confirmPracticeStart(true)">はい(クーポンを使う)</button></div>
@@ -1581,7 +1582,9 @@ function practiceConfirmScreen(menu) {
       <div class="pr-cost-cell">
         <span class="pr-cost-label">費用</span>
         <span class="pr-cost-val">¥${pv.cost.toLocaleString()}</span>
-        ${pv.couponValid ? `<span class="pr-cost-sub">クーポンで¥${pv.halfCost.toLocaleString()}</span>` : ''}
+        ${pv.couponValid
+          ? `<span class="pr-cost-sub">クーポンで¥${pv.halfCost.toLocaleString()}</span>`
+          : (pv.costMult > 1 ? `<span class="pr-cost-sub">Lv.${pv.level}で ×${pv.costMult}</span>` : '')}
       </div>
       <div class="pr-cost-cell">
         <span class="pr-cost-label">体力</span>
