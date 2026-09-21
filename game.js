@@ -107,7 +107,17 @@ const state = {
 };
 
 // ===== マスタデータ =====
-const MEMBER_COST = 25000;
+// サポートメンバーの雇用料。売れるほど、そしてレーベルに所属するほど高くなる。
+// 駆け出しのうちは1人10,000円。
+const MEMBER_COST_BASE = 10000;
+const MEMBER_COST_MAX = 50000;
+function memberHireCost() {
+  const fameAdd = Math.min(20000, (state.fame / 18000) * 20000);
+  const followerAdd = Math.min(12000, (state.followers / 11000) * 12000);
+  const labelMult = state.agencyStatus === 'major' ? 1.5 : (state.agencyStatus === 'indie' ? 1.2 : 1);
+  const raw = (MEMBER_COST_BASE + fameAdd + followerAdd) * labelMult;
+  return Math.min(MEMBER_COST_MAX, Math.round(raw / 1000) * 1000);
+}
 const PRODUCER_COST = 30000;
 // レコーディングのゲスト参加(たくま・りょーぺ)。親密度がMAXになると頼めるようになる。
 // ライブのサポートメンバーにはできない(あくまでスタジオでの客演)。
@@ -186,8 +196,8 @@ const CD_TYPES = [
 ];
 
 const MEMBERS = [
-  { key: 'bass', name: 'きさら(ベース)', cost: MEMBER_COST },
-  { key: 'drums', name: 'いつき(ドラム)', cost: MEMBER_COST },
+  { key: 'bass', name: 'きさら(ベース)' },
+  { key: 'drums', name: 'いつき(ドラム)' },
 ];
 const MEMBER_KEY_TO_FRIEND_ID = { bass: 'kisara', drums: 'itsuki' };
 
@@ -942,7 +952,7 @@ function generateFriendOffer() {
 function finalizeFriendOfferLive(offer, memberKeys) {
   memberKeys = memberKeys || [];
   const venue = VENUES.find(v => v.key === offer.venueKey) || VENUES[0];
-  const memberCost = memberKeys.length * MEMBER_COST;
+  const memberCost = memberKeys.length * memberHireCost();
   if (state.money < memberCost) { notifyInsufficientFunds(); render(); return; }
   state.money -= memberCost;
 
@@ -1231,7 +1241,7 @@ function hostCollabLive(friendId, venueKey, memberKeys) {
   const venue = VENUES.find(v => v.key === venueKey);
   if (!friend || !venue) return;
   memberKeys = memberKeys || [];
-  const totalCost = venue.cost + memberKeys.length * MEMBER_COST;
+  const totalCost = venue.cost + memberKeys.length * memberHireCost();
   if (state.money < totalCost) { notifyInsufficientFunds(); render(); return; }
   state.money -= totalCost;
 
@@ -1955,7 +1965,7 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
     render();
     return;
   }
-  const memberCost = memberKeys.length * MEMBER_COST;
+  const memberCost = memberKeys.length * memberHireCost();
   const producerCost = producerHired ? PRODUCER_COST : 0;
   const guestCost = guestIds.length * RECORD_GUEST_COST;
   const recordingBaseCost = songs.length * studio.costPerSong;
@@ -2079,7 +2089,7 @@ function doLive(memberKeys, opts) {
   if (isExtra && state.fame < venue.minFame) {
     addLog(`${venue.name}はまだ押さえられません`, 'neutral'); render(); return;
   }
-  const memberCost = memberKeys.length * MEMBER_COST;
+  const memberCost = memberKeys.length * memberHireCost();
   // 定期ライブはいつもの箱なので会場費なし。追加ライブは自分で押さえるぶん前払いになる。
   const venueCost = isExtra ? venue.cost : 0;
   const totalCost = memberCost + venueCost;
@@ -2646,7 +2656,7 @@ window.GameData = {
   MAJOR_AUDIENCE_REQUIRED, MAJOR_FAME_REQUIRED, MAJOR_FOLLOWERS_REQUIRED, MAJOR_OVERALL_REQUIRED, meetsMajorRequirements,
   MAJOR_SALARY_MIN, MAJOR_SALARY_MAX, calcMajorSalary,
   KEIBA_BET_LIMIT, KEIBA_PAYOUT_LIMIT, KEIBA_RACE_NAMES,
-  MEMBER_COST, PRODUCER_COST, MONTHLY_PERFORMANCE_THRESHOLD,
+  MEMBER_COST_BASE, MEMBER_COST_MAX, memberHireCost, PRODUCER_COST, MONTHLY_PERFORMANCE_THRESHOLD,
   SONG_HEALTH_COST,
   PRACTICE_STAMPS_FOR_COUPON, PRACTICE_COUPON_VALID_TURNS,
   PROMO_COOLDOWN_TURNS,

@@ -88,13 +88,35 @@ function setEventBgm(on) {
   updateBGM(currentTab);
 }
 
+// イベントらしい表示が画面に出ているか。
+// modalRootには吹き出し以外のモーダルと暗転(ワイプ)も入るので、ここを見れば
+// 「まだイベントの演出が続いている」かどうかが分かる。
+function eventVisualsOnScreen() {
+  if (dialogueState) return true;
+  if (modalQueue.length > 0) return true;
+  const root = document.getElementById('modalRoot');
+  if (root && root.innerHTML.trim() !== '') return true;
+  return false;
+}
+
 // イベントの表示がすべて終わっていれば通常BGMに戻す
 function endEventBgmIfIdle() {
   if (!bgmOverrideKey) return;
-  if (dialogueState) return;
-  if (modalQueue.length > 0) return;
+  if (eventVisualsOnScreen()) return;
   setEventBgm(false);
 }
+
+// setEventBgm(true)の呼び出し口が多く、閉じ方によっては戻し忘れが起きるため、
+// 「何も出ていないのにイベントBGMのまま」という状態を定期的に拾って戻す。
+// 演出の切れ目で誤作動しないよう、2回続けてアイドルだった時だけ戻す。
+let bgmIdleTicks = 0;
+function watchEventBgm() {
+  if (!bgmOverrideKey) { bgmIdleTicks = 0; return; }
+  if (eventVisualsOnScreen()) { bgmIdleTicks = 0; return; }
+  bgmIdleTicks += 1;
+  if (bgmIdleTicks >= 2) { bgmIdleTicks = 0; setEventBgm(false); }
+}
+setInterval(watchEventBgm, 700);
 
 let sfxObjects = {};
 
@@ -1733,6 +1755,7 @@ function thumbImg(src) {
 }
 
 function memberToggleRows(selectedArray, toggleFnName) {
+  const hireCost = window.GameData.memberHireCost();
   return window.GameData.MEMBERS.map(m => {
     const checked = selectedArray.includes(m.key);
     const npcKey = MEMBER_NPC_KEY[m.key];
@@ -1740,7 +1763,7 @@ function memberToggleRows(selectedArray, toggleFnName) {
     const charSrc = npc ? npc.idle : window.RECORDING_CHARS[MEMBER_CHAR_KEY[m.key]];
     return `<div class="row ${checked ? 'active' : ''}" onclick="${toggleFnName}('${m.key}')">
       ${thumbImg(charSrc)}
-      <div class="row-text"><p class="row-title">${m.name}</p><p class="row-sub">¥${m.cost.toLocaleString()}</p></div>
+      <div class="row-text"><p class="row-title">${m.name}</p><p class="row-sub">¥${hireCost.toLocaleString()}</p></div>
       <span class="row-value ${checked ? 'gold' : ''}">${checked ? '雇用中' : ''}</span>
     </div>`;
   }).join('');
@@ -1840,7 +1863,7 @@ function screenRecording() {
     </div>`;
   }).join('');
 
-  const memberCost = recordingState.members.length * window.GameData.MEMBER_COST;
+  const memberCost = recordingState.members.length * window.GameData.memberHireCost();
   const producerCost = recordingState.producer ? window.GameData.PRODUCER_COST : 0;
   const guestCost = (recordingState.guests || []).length * window.GameData.RECORD_GUEST_COST;
   const cost = selected.length * studio.costPerSong + memberCost + producerCost + guestCost;
@@ -1943,7 +1966,7 @@ function confirmProduceCD() {
 
   const s = window.GameState;
   const studio = window.GameData.STUDIOS.find(st => st.key === recordingState.studio) || window.GameData.STUDIOS[0];
-  const memberCost = recordingState.members.length * window.GameData.MEMBER_COST;
+  const memberCost = recordingState.members.length * window.GameData.memberHireCost();
   const producerCost = recordingState.producer ? window.GameData.PRODUCER_COST : 0;
   const guestCost = (recordingState.guests || []).length * window.GameData.RECORD_GUEST_COST;
   const recordingBaseCost = recordingState.selectedSongs.length * studio.costPerSong;
@@ -2157,7 +2180,7 @@ function screenLive() {
     `;
   }
 
-  const memberCost = liveFlowState.members.length * window.GameData.MEMBER_COST;
+  const memberCost = liveFlowState.members.length * window.GameData.memberHireCost();
   const confirmVenue = liveFlowState.venueKey
     ? (window.GameData.VENUES.find(v => v.key === liveFlowState.venueKey) || venue)
     : venue;
@@ -2248,7 +2271,7 @@ function startLiveSession() {
   const venue = isExtra
     ? (G.VENUES.find(v => v.key === liveFlowState.venueKey) || G.pickVenueForPlayer())
     : G.pickVenueForPlayer();
-  const memberCost = liveFlowState.members.length * G.MEMBER_COST;
+  const memberCost = liveFlowState.members.length * G.memberHireCost();
   const totalCost = memberCost + (isExtra ? venue.cost : 0);
   if (window.GameState.money < totalCost) {
     showInsufficientFundsToast();
@@ -3090,7 +3113,7 @@ function screenHostOffer() {
       <div class="job-grid">${cards}</div>`;
   }
   const venue = window.GameData.VENUES.find(v => v.key === hostOfferState.venue);
-  const memberCost = hostOfferState.members.length * window.GameData.MEMBER_COST;
+  const memberCost = hostOfferState.members.length * window.GameData.memberHireCost();
   return `<div class="header"><button class="back" onclick="hostOfferState.venue=null;render();">←</button><span>${venue.name}</span></div>
     <p class="section-label">サポートメンバーを選ぶ(任意・1人¥10,000)</p>
     <div class="list">${memberToggleRows(hostOfferState.members, 'toggleHostMember')}</div>
@@ -3619,7 +3642,7 @@ function screenFriendLive() {
   const offer = friendOfferFlowState.offer;
   if (!offer) return `<p class="empty">オファー情報がありません</p>`;
   const venue = window.GameData.VENUES.find(v => v.key === offer.venueKey);
-  const memberCost = friendOfferFlowState.members.length * window.GameData.MEMBER_COST;
+  const memberCost = friendOfferFlowState.members.length * window.GameData.memberHireCost();
   return `<div class="header"><span>${offer.friendName}との対バン(${venue.name})</span></div>
     <p class="section-label">サポートメンバーを選ぶ(任意・1人¥10,000)</p>
     <div class="list">${memberToggleRows(friendOfferFlowState.members, 'toggleFriendOfferMember')}</div>
@@ -3634,7 +3657,7 @@ function toggleFriendOfferMember(key) {
 }
 
 function startFriendLiveSession() {
-  const memberCost = friendOfferFlowState.members.length * window.GameData.MEMBER_COST;
+  const memberCost = friendOfferFlowState.members.length * window.GameData.memberHireCost();
   if (window.GameState.money < memberCost) {
     showInsufficientFundsToast();
     return;
@@ -5515,10 +5538,10 @@ function finishAfterpartyFlow() {
   const gsAfter = window.GameState;
   if (gsAfter.afterpartyKnackGained) segments.push({ text: '打ち上げ◯のコツをつかんだ！(習得に必要な経験点が半分になった)', type: 'plus' });
   if (gsAfter.justKnack) {
-    segments.push({ text: `10杯飲み切るのを${window.GameData.AFTERPARTY_KING_TIMES}回達成！金特殊能力「${gsAfter.justKnack.label}」のコツをつかんだ！`, type: 'money' });
+    segments.push({ text: `10杯飲み切るのを${window.GameActions.AFTERPARTY_KING_TIMES}回達成！金特殊能力「${gsAfter.justKnack.label}」のコツをつかんだ！`, type: 'money' });
     gsAfter.justKnack = null;
   } else if (result.drinks >= 10 && !(gsAfter.knacks || {}).afterpartyKing) {
-    segments.push({ text: `10杯飲み切った(${gsAfter.tenDrinkCount}/${window.GameData.AFTERPARTY_KING_TIMES})`, type: 'plus' });
+    segments.push({ text: `10杯飲み切った(${gsAfter.tenDrinkCount}/${window.GameActions.AFTERPARTY_KING_TIMES})`, type: 'plus' });
   }
   if (result.hungover) segments.push({ text: '二日酔いになってしまった…翌日は体調が優れない', type: 'minus' });
 
