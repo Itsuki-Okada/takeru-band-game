@@ -1021,8 +1021,9 @@ function resolveTakumaTkm1() {
     id: 'takuma', memberKey: 'takuma', isNpc: true,
     name: NPC_MEMBERS.takuma.name, bandName: NPC_MEMBERS.takuma.bandName,
     part: NPC_MEMBERS.takuma.part, stats: { ...NPC_MEMBERS.takuma.stats }, abilities: [...NPC_MEMBERS.takuma.abilities],
-    fame: NPC_MEMBERS.takuma.fame, followers: NPC_MEMBERS.takuma.followers, intimacy: 20,
+    fame: NPC_MEMBERS.takuma.fame, followers: NPC_MEMBERS.takuma.followers, intimacy: 10,
   });
+  addLog('たくまとの親密度が10上がった', 'plus');
   addLog('たくまがフレンドになった！', 'money');
   render();
 }
@@ -2173,9 +2174,9 @@ function doLive(memberKeys, opts) {
       id: 'ryohei', memberKey: 'ryohei', isNpc: true,
       name: NPC_MEMBERS.ryohei.name, bandName: NPC_MEMBERS.ryohei.bandName,
       part: NPC_MEMBERS.ryohei.part, stats: { ...NPC_MEMBERS.ryohei.stats }, abilities: [...NPC_MEMBERS.ryohei.abilities],
-      fame: NPC_MEMBERS.ryohei.fame, followers: NPC_MEMBERS.ryohei.followers, intimacy: 20,
+      fame: NPC_MEMBERS.ryohei.fame, followers: NPC_MEMBERS.ryohei.followers, intimacy: 10,
     });
-    addLog('りょーぺとの親密度が20上がった', 'plus');
+    addLog('りょーぺとの親密度が10上がった', 'plus');
     addLog('りょーぺがフレンドになった！', 'money');
     rp1JustTriggered = true;
   }

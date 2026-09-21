@@ -5574,7 +5574,7 @@ function showTakumaEventPopup(key) {
       null,
       window.VENUE_OUTSIDE_BG,
       null,
-      () => { GameActions.resolveTakumaTkm1(); closeToHomeAnimated(); }
+      () => { GameActions.resolveTakumaTkm1(); showTakumaTkm1Result(closeToHomeAnimated); }
     );
     return;
   }
@@ -5657,6 +5657,23 @@ function resolveTakumaTkm2Ui(choiceKey) {
   );
 }
 
+// TKM1でフレンドになったことを、りょーぺのRP1と同じ「成果の吹き出し」で伝える
+function showTakumaTkm1Result(onClose) {
+  const takumaImg = (window.MEMBER_CHARS && window.MEMBER_CHARS.takuma) ? window.MEMBER_CHARS.takuma.convo : heroPortrait();
+  showResultDialogue(
+    [
+      { src: idlePortrait(), name: window.GameState.playerName || 'タケル', active: true },
+      { src: takumaImg, name: 'たくま', active: true },
+    ],
+    'たくま',
+    [
+      { text: 'たくまとの親密度が10上がった', type: 'plus' },
+      { text: 'たくまがフレンドになった！', type: 'money' },
+    ],
+    null, window.VENUE_OUTSIDE_BG, null, onClose
+  );
+}
+
 function showTakumaCollabDayPopup() {
   showDialogueScene(
     [{ src: idlePortrait(), name: window.GameState.playerName || 'タケル', active: true }],
@@ -5678,7 +5695,7 @@ function showRyoheiRP1Dialogue(onClose) {
     { text: '技術経験点を10得た', type: 'plus' },
     { text: '知力経験点を10得た', type: 'plus' },
     { text: '精神経験点を10得た', type: 'plus' },
-    { text: 'りょーぺとの親密度が7上がった', type: 'plus' },
+    { text: 'りょーぺとの親密度が10上がった', type: 'plus' },
     { text: 'りょーぺがフレンドになった！', type: 'money' },
   ];
   showResultDialogue(
