@@ -168,6 +168,7 @@ const StatsEngine = (function () {
   // unlockType: 'exp'(経験点を消費して習得/昇格) / 'mastery'(アルバイト熟練度MAXで自動習得)
   const ABILITIES = {
     onkan: {
+      knackKey: 'onkan',
       name: '音感',
       effect: '作曲時・ライブ本番時の完成度/出来にボーナス',
       unlockType: 'exp',
@@ -178,6 +179,7 @@ const StatsEngine = (function () {
       ],
     },
     rhythm: {
+      knackKey: 'rhythm',
       name: 'リズム感',
       effect: '作曲時・ライブ本番時の完成度/出来にボーナス',
       unlockType: 'exp',
@@ -266,25 +268,25 @@ const StatsEngine = (function () {
     yataibone: {
       name: '屋台骨',
       effect: 'きさらがリズムで支えてくれる。ライブの出来が落ちにくくなり、最低でも実力どおりの演奏ができる',
-      unlockType: 'friendship', friendId: 'kisara', super: true,
+      knackKey: 'rhythm', unlockType: 'friendship', friendId: 'kisara', super: true,
       tiers: [{ tier: 'gold', label: '屋台骨', cost: { ski: 200, str: 160, men: 120 } }],
     },
     fudou: {
       name: '不動',
       effect: 'いつきに倣って動じなくなる。風邪をひかず、熱も出さない',
-      unlockType: 'friendship', friendId: 'itsuki', super: true,
+      knackKey: 'patience', unlockType: 'friendship', friendId: 'itsuki', super: true,
       tiers: [{ tier: 'gold', label: '不動', cost: { men: 220, str: 160, int: 100 } }],
     },
     hitotarashi: {
       name: '人たらし',
       effect: 'りょーぺ直伝。親密度が大きく上がり、対バンの誘いをほぼ断られなくなる',
-      unlockType: 'friendship', friendId: 'ryohei', super: true,
+      knackKey: 'charisma', unlockType: 'friendship', friendId: 'ryohei', super: true,
       tiers: [{ tier: 'gold', label: '人たらし', cost: { men: 200, int: 180, ski: 100 } }],
     },
     zesshou: {
       name: '絶唱',
       effect: 'たくまに学んだ歌。大きい会場ほど声が乗り、緊張が逆に力になる',
-      unlockType: 'friendship', friendId: 'takuma', super: true,
+      knackKey: 'onkan', unlockType: 'friendship', friendId: 'takuma', super: true,
       tiers: [{ tier: 'gold', label: '絶唱', cost: { str: 200, men: 180, ski: 100 } }],
     },
 
@@ -364,12 +366,12 @@ const StatsEngine = (function () {
     const nextTierIndex = owned ? def.tiers.findIndex(t => t.tier === owned.tier) + 1 : 0;
     const nextTier = def.tiers[nextTierIndex];
     if (!nextTier || !nextTier.cost) return null;
-    let lv = def.knackKey ? knackLevel(state, def.knackKey) : 0;
-    if (nextTier.tier === 'gold') lv = Math.max(lv, bestKnackLevel(state));
+    // その能力に対応するコツだけが効く(包括的な割引はしない)
+    const lv = def.knackKey ? knackLevel(state, def.knackKey) : 0;
     const discount = costMultiplier(state) * knackDiscount(lv);
     const cost = {};
     Object.keys(nextTier.cost).forEach(c => { cost[c] = Math.max(1, Math.round(nextTier.cost[c] * discount)); });
-    return { cost, knackLevel: lv, off: Math.round((1 - knackDiscount(lv)) * 100), tier: nextTier.tier, label: nextTier.label };
+    return { cost, knackLevel: lv, knackKey: def.knackKey || null, off: Math.round((1 - knackDiscount(lv)) * 100), tier: nextTier.tier, label: nextTier.label };
   }
 
   function tryUnlockAbility(state, abilityKey) {
@@ -398,8 +400,7 @@ const StatsEngine = (function () {
       const rawCost = nextTier.cost || {};
       let discount = costMultiplier(state);
       // その能力のコツ。金特殊(gold)は下位のコツでも割引が効く。
-      let lv = def.knackKey ? knackLevel(state, def.knackKey) : 0;
-      if (nextTier.tier === 'gold') lv = Math.max(lv, bestKnackLevel(state));
+      const lv = def.knackKey ? knackLevel(state, def.knackKey) : 0;
       discount *= knackDiscount(lv);
       const cost = {};
       Object.keys(rawCost).forEach(c => { cost[c] = Math.max(1, Math.round(rawCost[c] * discount)); });
@@ -449,8 +450,8 @@ const StatsEngine = (function () {
     const def = ABILITIES[key];
     if (!def || !def.tiers[0].cost) return {};
     const raw = def.tiers[0].cost;
-    // 超特殊能力も、持っているコツのぶんだけ安くなる
-    const discount = costMultiplier(state) * knackDiscount(bestKnackLevel(state));
+    // 超特殊能力は、対応する下位のコツ(屋台骨=リズム感 など)を掴んでいるぶんだけ安くなる
+    const discount = costMultiplier(state) * knackDiscount(knackLevel(state, def.knackKey));
     const out = {};
     Object.keys(raw).forEach(c => { out[c] = Math.max(1, Math.round(raw[c] * discount)); });
     return out;

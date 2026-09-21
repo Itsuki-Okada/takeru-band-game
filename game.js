@@ -744,6 +744,36 @@ function checkTakumaMeeting() {
 // 10杯飲み切るのをこの回数こなすと「打ち上げ王」のコツが手に入る
 const AFTERPARTY_KING_TIMES = 5;
 
+// ===== フレンドから受け継ぐコツ =====
+// 一緒に演奏すると、そのキャラの得意なことが少しずつ身につく。
+// 掴んだコツはその能力と、対応する超特殊能力の必要経験点を下げる。
+//   きさら=リズム感(屋台骨) / いつき=忍耐力(不動) / りょーぺ=コミュ力(人たらし) / たくま=音感(絶唱)
+const FRIEND_KNACK = { kisara: 'rhythm', itsuki: 'patience', ryohei: 'charisma', takuma: 'onkan' };
+const FRIEND_KNACK_CHANCE = { live: 0.30, recording: 0.22 };
+
+// 一緒にやった相手からコツをもらえるか抽選する。もらえたらレベルが1上がる(最大5)。
+// 戻り値: もらえた場合 { name, knackKey, abilityName, level, off } / もらえなければ null
+function rollFriendKnack(friendId, source) {
+  const knackKey = FRIEND_KNACK[friendId];
+  if (!knackKey) return null;
+  const chance = FRIEND_KNACK_CHANCE[source] || 0.2;
+  if (Math.random() >= chance) return null;
+  state.knacks = state.knacks || {};
+  const before = StatsEngine.knackLevel(state, knackKey);
+  if (before >= StatsEngine.KNACK_MAX_LEVEL) return null;   // 上限に達していたら何も起きない
+  const level = before + 1;
+  state.knacks[knackKey] = level;
+  const def = StatsEngine.ABILITIES[knackKey] || {};
+  const friend = (state.friends || []).find(f => f.id === friendId);
+  const info = {
+    name: (friend && friend.name) || (NPC_MEMBERS[friendId] || {}).name || '',
+    knackKey, abilityName: def.name || knackKey, level,
+    off: Math.round((1 - StatsEngine.knackDiscount(level)) * 100),
+  };
+  addLog(`${info.name}から${info.abilityName}のコツを教わった！(Lv.${level} / 必要経験点が${info.off}%引き)`, 'money');
+  return info;
+}
+
 // ===== 超特殊能力(親密度100で習得) =====
 function learnSuperAbilityFrom(friendId) {
   const f = state.friends.find(x => x.id === friendId);
@@ -1070,7 +1100,8 @@ function finalizeFriendOfferLive(offer, memberKeys) {
       if (collabIntimacyGain > 0) addLog(`${collabFriend.name}との親密度が${collabIntimacyGain}上がった`, 'plus');
     }
   }
-  const info = { collabIntimacyGain, friendId: offer.friendId, friendName: offer.friendName, bandName: offer.bandName, venueName: venue.name, venueKey: venue.key, audience, fameGain, gala: offer.gala, isRyoheiFirstCollab };
+  const collabKnack = rollFriendKnack(offer.friendId, 'live');
+  const info = { knacksLearned: collabKnack ? [collabKnack] : [], collabIntimacyGain, friendId: offer.friendId, friendName: offer.friendName, bandName: offer.bandName, venueName: venue.name, venueKey: venue.key, audience, fameGain, gala: offer.gala, isRyoheiFirstCollab };
   state.justCollabLive = info;
   render();
   return info;
@@ -2092,7 +2123,18 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
   const guestNote = guestNames.length ? ` / ゲスト: ${guestNames.join('・')}` : '';
   const discountNote = recordingCostMult() < 1 ? '(レーベルのレコーディング費用負担あり)' : '';
   addLog(`「${release.title}」(${type.name}/${songs.length}曲/${studio.name})を制作した${discountNote}(-${yen(totalCost)}${memberNote}${producerNote}${guestNote})`, 'minus');
-  state.justRecordedCD = { releaseId: release.id, title: release.title, typeName: release.typeName, songCount: release.songCount, completionAvg: release.completionAvg, studioName: studio.name, studioKey: studio.key, appliedExp };
+  const recKnacks = [];
+  memberKeys.forEach(k => {
+    const fid = MEMBER_KEY_TO_FRIEND_ID[k];
+    if (!fid) return;
+    const kn = rollFriendKnack(fid, 'recording');
+    if (kn) recKnacks.push(kn);
+  });
+  guestIds.forEach(id => {
+    const kn = rollFriendKnack(id, 'recording');
+    if (kn) recKnacks.push(kn);
+  });
+  state.justRecordedCD = { knacksLearned: recKnacks, releaseId: release.id, title: release.title, typeName: release.typeName, songCount: release.songCount, completionAvg: release.completionAvg, studioName: studio.name, studioKey: studio.key, appliedExp };
   const healthCost = Math.min(25, 5 + songs.length * 1.5);
   applyHealthCost(healthCost);
   // レコーディング→リリース→初動売上は一続きの流れとして扱うため、ここでは日付を進めない。
@@ -2261,6 +2303,8 @@ function doLive(memberKeys, opts) {
         }
       }
       addLog(`${g.name}(${g.bandName})が対バンしてくれた！`, 'plus');
+      const k = rollFriendKnack(g.id, 'live');
+      if (k) (state.justPlayedLive.knacksLearned = state.justPlayedLive.knacksLearned || []).push(k);
     });
     if (guests.length === 1) state.justPlayedLive.guestIntimacyGain = (state.justPlayedLive.guestIntimacy[0] || {}).gained || 0;
     // 出演済みのゲストを消化する
@@ -2287,6 +2331,10 @@ function doLive(memberKeys, opts) {
     const fid = MEMBER_KEY_TO_FRIEND_ID[k];
     const f = fid && state.friends.find(x => x.id === fid);
     if (f) addIntimacy(f, LIVE_INTIMACY_GAIN);
+    if (fid) {
+      const kn = rollFriendKnack(fid, 'live');
+      if (kn) (state.justPlayedLive.knacksLearned = state.justPlayedLive.knacksLearned || []).push(kn);
+    }
   });
 
   state.lastLiveHadMembers = memberKeys.length > 0;
@@ -2740,6 +2788,7 @@ window.GameActions = {
   doPromotion, recordGuestCandidates, canGuestRecord, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
   AFTERPARTY_KING_TIMES, GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
   GUEST_INVITE_GALA, guestInviteGala, guestInviteVenue, COLLAB_INTIMACY_GAIN,
+  FRIEND_KNACK, FRIEND_KNACK_CHANCE,
   PROMO_MAX_PER_MONTH, promoLeftThisMonth,
   GUEST_INVITE_MIN_INTIMACY, canInviteGuest, isGuestCandidate, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
   learnSuperAbilityFrom, canLearnSuperFrom,

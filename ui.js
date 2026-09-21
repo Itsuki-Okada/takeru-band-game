@@ -3895,6 +3895,9 @@ function showCollabLiveFinishedDialogue(info) {
   if (info.collabIntimacyGain > 0) {
     resultSegments.push({ text: `${info.friendName}との親密度が${info.collabIntimacyGain}上がった`, type: 'plus' });
   }
+  (info.knacksLearned || []).forEach(k => {
+    resultSegments.push({ text: `${k.name}から${k.abilityName}のコツを教わった！(Lv.${k.level} / 必要経験点-${k.off}%)`, type: 'money' });
+  });
   if (info.gala !== undefined) {
     resultSegments.push({ text: `ギャラ${yen(info.gala)}を受け取った`, type: 'money' });
   } else if (info.profit !== undefined) {
@@ -5506,6 +5509,7 @@ function showRecordingPopup(info) {
         { text: `${info.songCount}曲収録 / ${info.studioName}`, type: 'neutral' },
         { text: `完成度${info.completionAvg}になった`, type: 'plus' },
         ...expLines,
+        ...((info.knacksLearned || []).map(k => ({ text: `${k.name}から${k.abilityName}のコツを教わった！(Lv.${k.level} / 必要経験点-${k.off}%)`, type: 'money' }))),
       ],
       dialogueChoices([
         { label: 'リリース', action: `closeDialogue();GameActions.releaseCD(${info.releaseId});` },
@@ -5527,6 +5531,7 @@ function showLiveFinishedDialogue(info) {
     { text: `${info.venueName}でのライブが終わった！`, type: 'neutral' },
     ...((info.guests || []).map(g => ({ text: `${g.bandName ? g.bandName + 'の' : ''}${g.name}が対バンしてくれた！`, type: 'plus' }))),
     ...((info.guestIntimacy || []).map(g => ({ text: `${g.name}との親密度が${g.gained}上がった`, type: 'plus' }))),
+    ...((info.knacksLearned || []).map(k => ({ text: `${k.name}から${k.abilityName}のコツを教わった！(Lv.${k.level} / 必要経験点-${k.off}%)`, type: 'money' }))),
     { text: `動員${info.audience.toLocaleString()}人 / 出来${info.performanceFinal}`, type: 'neutral' },
     { text: `知名度が${info.fameGain}増えた`, type: 'plus' },
     ...expLines,
@@ -5713,7 +5718,10 @@ function finishAfterpartyFlow() {
   const gsAfter = window.GameState;
   if (gsAfter.afterpartyKnackGained) {
     const k = gsAfter.afterpartyKnackGained;
-    segments.push({ text: `打ち上げのコツがLv.${k.level}になった！(必要経験点が${k.off}%引き)`, type: 'plus' });
+    // 古いセーブでは真偽値で入っているので、その場合は現在のレベルから出し直す
+    const lv = (k && k.level) || StatsEngine.knackLevel(gsAfter, 'afterparty');
+    const off = (k && k.off) || Math.round((1 - StatsEngine.knackDiscount(lv)) * 100);
+    if (lv > 0) segments.push({ text: `打ち上げのコツがLv.${lv}になった！(必要経験点が${off}%引き)`, type: 'plus' });
   }
   if (gsAfter.justKnack) {
     segments.push({ text: `10杯飲み切るのを${window.GameActions.AFTERPARTY_KING_TIMES}回達成！金特殊能力「${gsAfter.justKnack.label}」のコツをつかんだ！`, type: 'money' });
