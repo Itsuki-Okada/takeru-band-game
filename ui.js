@@ -1542,10 +1542,13 @@ function practiceConfirmScreen(menu) {
 
   // レベルのゲージ(次のレベルまであと何回か)
   const lvPips = Array.from({ length: 5 }, (_, i) =>
-    `<span class="pr-lv-pip ${i < (pv.levelUp ? pv.level - 1 : pv.level) ? 'pr-lv-pip-on' : ''}"></span>`).join('');
+    `<span class="pr-lv-pip ${i < pv.level ? 'pr-lv-pip-on' : ''} ${pv.levelUp && i === pv.level - 1 ? 'pr-lv-pip-new' : ''}"></span>`).join('');
 
   const notes = [];
-  if (pv.levelUp) notes.push({ t: `この練習でLv.${pv.level}にアップ！経験点が${pv.levelMult}倍に`, c: 'good' });
+  if (pv.levelUp) {
+    const prevMult = window.GameData.PRACTICE_LEVEL_MULTIPLIER[pv.level - 2] || 1;
+    notes.push({ t: `この練習でLv.${pv.level}にアップ！経験点が${prevMult}倍→${pv.levelMult}倍になる`, c: 'good' });
+  }
   else if (pv.level < 5) notes.push({ t: `あと${pv.toNextLevel}回でLv.${pv.level + 1}`, c: 'info' });
   else notes.push({ t: 'レベルは最大です', c: 'info' });
   if (pv.condition === 'cold') notes.push({ t: '風邪ぎみ…獲得量が下がっている', c: 'bad' });
@@ -1562,9 +1565,11 @@ function practiceConfirmScreen(menu) {
       <div class="pr-hero-plate">
         <p class="pr-hero-name">${menu.name}</p>
         <div class="pr-lv-row">
-          <span class="pr-lv-badge">Lv.${pv.levelUp ? pv.level - 1 : pv.level}</span>
+          <span class="pr-lv-badge">${pv.levelUp
+            ? `Lv.${pv.level - 1}<span class="pr-lv-arrow">→</span>Lv.${pv.level}`
+            : `Lv.${pv.level}`}</span>
           <span class="pr-lv-pips">${lvPips}</span>
-          <span class="pr-lv-mult">経験点 ×${pv.levelMult}</span>
+          <span class="pr-lv-mult">この練習は 経験点 ×${pv.levelMult}</span>
         </div>
       </div>
     </div>
