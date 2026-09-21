@@ -31,7 +31,9 @@ const state = {
   totalEarnings: 0, // 累計収入(エンディングの「総取得金額」表示用)
   indieOfferThreshold: Math.round(13000 + Math.random() * 4000), // 約15,000前後
   declinedIndieOffer: false,
+  indieOfferPausedUntil: 0,   // インディーズのオファーを見送った後、次に声がかかるまで
   declinedMajorOffer: false,
+  majorOfferPausedUntil: 0,   // メジャーのオファーを見送った後、次に声がかかるまで
   justAgencyOffer: null,
   justIndieLabelOffer: false,
   justKeibaEvent: null, // きさらの競馬イベント。{ raceName } を入れるとその日の行動後に発生する
@@ -1835,6 +1837,8 @@ let MAJOR_AUDIENCE_REQUIRED = 0;        // 廃止(1本のライブで呼べた�
 let MAJOR_FAME_REQUIRED = 15000;
 let MAJOR_FOLLOWERS_REQUIRED = 10000;
 let MAJOR_OVERALL_REQUIRED = 68;        // Cランク上位相当
+const MAJOR_OFFER_RETRY_TURNS = 4;   // 見送ってから、また声がかかるまでの週数
+const INDIE_OFFER_RETRY_TURNS = 4;
 let MAJOR_OFFER_CHANCE = 0.40;        // 条件を満たせば数週以内に必ず声がかかる(=抽選ではなく条件で決まる)
 
 // メジャーの給料。知名度・フォロワー・ライブの動員から20万〜50万の間で決まる。
@@ -1883,12 +1887,12 @@ function checkAgencyOffers() {
   // メジャーのオファーは他のイベントと同時に出ても構わない(モーダルのキューで順番に出る)。
   // ここで弾くと、イベントが出た週ぶん抽選機会が減ってしまう。
   if (state.justAgencyOffer) return;
-  if (state.agencyStatus === 'unsigned' && !state.declinedIndieOffer && meetsIndieRequirements()) {
+  if (state.agencyStatus === 'unsigned' && state.turn >= (state.indieOfferPausedUntil || 0) && meetsIndieRequirements()) {
     // 同じ日に別のイベントが控えている時は見送り、次のターン以降に改めて出す
     if (state.justFriendOffer || state.justFlavorEvent || state.justRyoheiEvent
         || state.justDrNasakenaiEvent || state.justTakumaEvent) return;
     state.justIndieLabelOffer = true;
-  } else if (state.agencyStatus === 'indie' && !state.declinedMajorOffer
+  } else if (state.agencyStatus === 'indie' && state.turn >= (state.majorOfferPausedUntil || 0)
       && meetsMajorRequirements() && Math.random() < MAJOR_OFFER_CHANCE) {
     state.justAgencyOffer = { type: 'major' };
   }
@@ -1937,7 +1941,7 @@ function acceptIndieLabel(labelKey) {
 }
 
 function declineIndieLabelOffer() {
-  state.declinedIndieOffer = true;
+  state.indieOfferPausedUntil = state.turn + INDIE_OFFER_RETRY_TURNS;
   addLog('インディーズレーベルのオファーを見送った', 'neutral');
   render();
 }
@@ -1957,8 +1961,10 @@ function acceptAgencyOffer(offerType) {
 }
 
 function declineAgencyOffer(offerType) {
-  if (offerType === 'indie') state.declinedIndieOffer = true;
-  if (offerType === 'major') state.declinedMajorOffer = true;
+  if (offerType === 'indie') state.indieOfferPausedUntil = state.turn + INDIE_OFFER_RETRY_TURNS;
+  // メジャーは一度見送っても、しばらくするとまた声がかかる。
+  // (以前は永久に来なくなり、条件を満たしていても二度とデビューできなかった)
+  if (offerType === 'major') state.majorOfferPausedUntil = state.turn + MAJOR_OFFER_RETRY_TURNS;
   addLog('事務所のオファーを見送った', 'neutral');
   render();
 }
@@ -1972,7 +1978,7 @@ function processMonthlyAgency() {
   addLog(`事務所から給料が振り込まれた(+${yen(state.agencySalary)})`, 'plus');
   if (state.monthlyPerformance < MONTHLY_PERFORMANCE_THRESHOLD) {
     state.agencyStatus = 'indie';
-    state.declinedMajorOffer = false; // 立て直せば再度メジャーのオファーが来る可能性がある
+    state.majorOfferPausedUntil = 0; // 立て直せば再度メジャーのオファーが来る
     addLog('CDの売れ行き・ライブの動員が伸びず、事務所を解雇された…アルバイトが可能になった', 'minus');
   }
   state.monthlyPerformance = 0;
@@ -2655,7 +2661,9 @@ function resetGameState() {
   state.sick = false;
   state.indieOfferThreshold = Math.round(13000 + Math.random() * 4000);
   state.declinedIndieOffer = false;
+  state.indieOfferPausedUntil = 0;
   state.declinedMajorOffer = false;
+  state.majorOfferPausedUntil = 0;
   state.justAgencyOffer = null;
   state.justIndieLabelOffer = false;
   state.justKeibaEvent = null;

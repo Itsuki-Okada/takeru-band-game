@@ -154,6 +154,9 @@ const StatsEngine = (function () {
   // 「能力を集めるだけでSランク」になってしまう。ステータスを伸ばす道と
   // 釣り合う程度に抑えている。
   let ABILITY_ASSESS = { normal: 0.5, great: 1, gold: 2, super: 8 };
+  // 能力は27種あるので、集めるほど際限なく積み上がってしまう。
+  // プラス側の合計には上限を設け、ステータスを伸ばす道と釣り合うようにする。
+  let ABILITY_ASSESS_CAP = 12;
   function setAbilityAssess(v) { ABILITY_ASSESS = Object.assign({}, ABILITY_ASSESS, v || {}); }
   function abilityAssessValue(def, tier) {
     if (def && def.super) return ABILITY_ASSESS.super;
@@ -162,13 +165,15 @@ const StatsEngine = (function () {
 
   function calcOverallScore(state) {
     const statAvg = STAT_ORDER.reduce((sum, k) => sum + (state.stats[k] || 0), 0) / STAT_ORDER.length;
-    const abilityBonus = (state.abilities || []).reduce((sum, a) => {
+    let plus = 0, minus = 0;
+    (state.abilities || []).forEach(a => {
       const def = ABILITIES[a.key];
       const bonus = abilityAssessValue(def, a.tier);
-      // マイナス能力は総合力を下げる(こちらは重めに効く)
-      return sum + (def && def.negative ? -(bonus * 2) : bonus);
-    }, 0);
-    return statAvg + abilityBonus;
+      // マイナス能力は総合力を下げる(こちらは重めに効き、上限もかからない)
+      if (def && def.negative) minus += bonus * 2;
+      else plus += bonus;
+    });
+    return statAvg + Math.min(ABILITY_ASSESS_CAP, plus) - minus;
   }
   function getOverallRank(state) {
     return getRank(calcOverallScore(state));
@@ -583,7 +588,7 @@ const StatsEngine = (function () {
     getRank, getRankIndex, pointCost, setCostCurve,
     gainExp, getExpMultiplier, applyMultiplier,
     KNACK_MAX_LEVEL, knackLevel, knackDiscount, bestKnackLevel, abilityNextCost,
-    ABILITY_ASSESS, setAbilityAssess, abilityAssessValue,
+    ABILITY_ASSESS, ABILITY_ASSESS_CAP, setAbilityAssess, abilityAssessValue,
     raiseStat, calcOverallScore, getOverallRank,
     tryUnlockAbility, hasSense, grantRandomNegative, rollStartingAbility,
     FRIENDSHIP_ABILITY_REQUIRED, superAbilityFor, canLearnSuperAbility, learnSuperAbility,
