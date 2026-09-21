@@ -5615,6 +5615,7 @@ function respondAfterpartyUI(join, partnerKey) {
     if (join) {
       // 対バン相手はそのまま打ち上げにも同席する(2組なら3人で飲む)
       afterpartyPartnerKeys = partnerKey ? (Array.isArray(partnerKey) ? partnerKey.slice() : [partnerKey]) : [];
+      drinkBusy = false;
       GameActions.startAfterparty();
       showDrinkPrompt(true);
     } else {
@@ -5696,7 +5697,7 @@ function handleDrinkChoice(wantDrink) {
 
 // 飲みゲームから「逃げる」を選んだ場合。体力のみ回復し、経験点は得られない。
 function handleDrinkFlee() {
-  if (drinkBusy || afterpartyFinishing) return;
+  if (drinkBusy) return;
   const result = GameActions.fleeAfterparty();
   const segments = [{ text: '隙を見て打ち上げから逃げ出した…', type: 'neutral' }];
   if (result.healthGain > 0) segments.push({ text: `体力が${result.healthGain}回復した`, type: 'plus' });
@@ -5712,7 +5713,6 @@ function handleDrinkFlee() {
     window.AFTERPARTY_BG,
     'live',
     () => {
-      afterpartyFinishing = false;
       afterpartyPartnerKeys = [];
       GameActions.endAfterpartyAndGoHome();
       const s = window.GameState;
@@ -5725,12 +5725,10 @@ function handleDrinkFlee() {
   );
 }
 
-let afterpartyFinishing = false;
 function finishAfterpartyFlow() {
-  // 二重に呼ばれると2回目は杯数0の結果になってしまうので、1回だけ通す
-  if (afterpartyFinishing) return;
+  // 二重に呼ばれると2回目は杯数0の結果になってしまう。
+  // finishAfterparty()が状態を消すので、消えていれば2回目以降として弾く。
   if (!window.GameState.afterpartyState) return;
-  afterpartyFinishing = true;
   drinkBusy = false;
   const result = GameActions.finishAfterparty();
   const applied = result.applied || {};
