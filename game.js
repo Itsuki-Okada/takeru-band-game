@@ -706,6 +706,16 @@ function canLearnSuperFrom(friendId) {
 // 親密度50以上のフレンドを、次の定期ライブに誘える。週は消費しない。
 // 親密度が高いほど受けてもらいやすい。
 const GUEST_INVITE_MIN_INTIMACY = 50;
+// 対バン本番に一緒に出たときの親密度(相手から誘われた場合・自分から誘った場合の両方)
+const COLLAB_INTIMACY_GAIN = 10;
+// こちらから誘う場合は、相手のバンドにギャラを払う。箱が大きいほど高い。
+const GUEST_INVITE_GALA = { street: 10000, small: 30000, mid: 80000, zepp: 240000, hall: 500000, budokan: 1000000 };
+// 定期ライブの会場は当日に自動で決まるので、誘う時点での見込みの箱でギャラを出す
+function guestInviteVenue() { return pickVenueForPlayer(); }
+function guestInviteGala(venueKey) {
+  const key = venueKey || guestInviteVenue().key;
+  return GUEST_INVITE_GALA[key] != null ? GUEST_INVITE_GALA[key] : 30000;
+}
 
 // 自分のバンドのメンバー(きさら・いつき)は対バンの相手にはならない。
 // 誘えるのは、自分のバンドを持っているフレンド(りょーぺ・たくま)だけ。
@@ -731,6 +741,7 @@ function canInviteGuest(friendId) {
   const f = state.friends.find(x => x.id === friendId);
   if (!isGuestCandidate(f)) return false;
   if ((f.intimacy || 0) < GUEST_INVITE_MIN_INTIMACY) return false;
+  if (state.money < guestInviteGala()) return false;      // ギャラが払えない
   return true;
 }
 
@@ -748,7 +759,12 @@ function inviteGuestToLive(friendId) {
   const npc = NPC_MEMBERS[f.memberKey || f.id] || {};
   const accepted = Math.random() < guestAcceptChance(f.intimacy);
   const liveTurn = state.nextLiveTurn;
+  const inviteVenue = guestInviteVenue();
+  const gala = guestInviteGala(inviteVenue.key);
   if (accepted) {
+    // 断られた場合はギャラは発生しない
+    state.money -= gala;
+    addLog(`${f.name}(${f.bandName || npc.bandName || ''})へのギャラ${yen(gala)}を払った(${inviteVenue.name})`, 'minus');
     state.scheduledGuest = {
       id: f.id, memberKey: f.memberKey || f.id,
       name: f.name, bandName: f.bandName || npc.bandName || '',
@@ -764,6 +780,7 @@ function inviteGuestToLive(friendId) {
     friendId: f.id, memberKey: f.memberKey || f.id, name: f.name,
     bandName: f.bandName || npc.bandName || '',
     accepted, dateLabel: turnToDateLabel(liveTurn),
+    gala: accepted ? gala : 0, venueName: inviteVenue.name,
   };
   render();
   return state.justGuestReply;
@@ -965,6 +982,11 @@ function finalizeFriendOfferLive(offer, memberKeys) {
     state.takumaEvents.collabAnnounced = false;
     state.takumaPendingOffer = null;
   }
+  // 一緒にステージに立ったぶん、相手との距離が縮まる
+  {
+    const collabFriend = state.friends.find(f => f.id === offer.friendId);
+    if (collabFriend) addIntimacy(collabFriend, COLLAB_INTIMACY_GAIN);
+  }
   const info = { friendId: offer.friendId, friendName: offer.friendName, bandName: offer.bandName, venueName: venue.name, venueKey: venue.key, audience, fameGain, gala: offer.gala, isRyoheiFirstCollab };
   state.justCollabLive = info;
   render();
@@ -999,7 +1021,7 @@ function resolveTakumaTkm1() {
     id: 'takuma', memberKey: 'takuma', isNpc: true,
     name: NPC_MEMBERS.takuma.name, bandName: NPC_MEMBERS.takuma.bandName,
     part: NPC_MEMBERS.takuma.part, stats: { ...NPC_MEMBERS.takuma.stats }, abilities: [...NPC_MEMBERS.takuma.abilities],
-    fame: NPC_MEMBERS.takuma.fame, followers: NPC_MEMBERS.takuma.followers, intimacy: 10,
+    fame: NPC_MEMBERS.takuma.fame, followers: NPC_MEMBERS.takuma.followers, intimacy: 20,
   });
   addLog('たくまがフレンドになった！', 'money');
   render();
@@ -2138,7 +2160,7 @@ function doLive(memberKeys, opts) {
     guestName: guest ? guest.name : null, guestBand: guest ? guest.bandName : null };
   if (guest) {
     const gf = state.friends.find(x => x.id === guest.id);
-    if (gf) addIntimacy(gf, 8);   // 一緒に出たぶん大きく縮まる
+    if (gf) addIntimacy(gf, COLLAB_INTIMACY_GAIN);   // 一緒に出たぶん大きく縮まる
     addLog(`${guest.name}(${guest.bandName})が対バンしてくれた！`, 'plus');
     state.scheduledGuest = null;
   }
@@ -2151,9 +2173,9 @@ function doLive(memberKeys, opts) {
       id: 'ryohei', memberKey: 'ryohei', isNpc: true,
       name: NPC_MEMBERS.ryohei.name, bandName: NPC_MEMBERS.ryohei.bandName,
       part: NPC_MEMBERS.ryohei.part, stats: { ...NPC_MEMBERS.ryohei.stats }, abilities: [...NPC_MEMBERS.ryohei.abilities],
-      fame: NPC_MEMBERS.ryohei.fame, followers: NPC_MEMBERS.ryohei.followers, intimacy: 7,
+      fame: NPC_MEMBERS.ryohei.fame, followers: NPC_MEMBERS.ryohei.followers, intimacy: 20,
     });
-    addLog('りょーぺとの親密度が7上がった', 'plus');
+    addLog('りょーぺとの親密度が20上がった', 'plus');
     addLog('りょーぺがフレンドになった！', 'money');
     rp1JustTriggered = true;
   }
@@ -2607,6 +2629,7 @@ window.GameActions = {
   spendExtraWeek,
   doPromotion, recordGuestCandidates, canGuestRecord, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
   AFTERPARTY_KING_TIMES, GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
+  GUEST_INVITE_GALA, guestInviteGala, guestInviteVenue, COLLAB_INTIMACY_GAIN,
   GUEST_INVITE_MIN_INTIMACY, canInviteGuest, isGuestCandidate, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
   learnSuperAbilityFrom, canLearnSuperFrom,
   resolveRyoheiRP3, scheduleRyoheiCollab, finalizeRecordingDay, resolveDrNasakenaiChoice, fleeAfterparty,

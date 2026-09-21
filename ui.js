@@ -2775,15 +2775,17 @@ function inviteGuestScene(friendId) {
   const charImg = (window.MEMBER_CHARS && window.MEMBER_CHARS[memberKey])
     ? window.MEMBER_CHARS[memberKey].convo : idlePortrait();
   const dateLabel = window.GameData.turnToDateLabel(s.nextLiveTurn);
+  const venue = GameActions.guestInviteVenue();
+  const gala = GameActions.guestInviteGala(venue.key);
   const portraits = [
     { src: idlePortrait(), name: s.playerName || 'タケル', active: true },
     { src: charImg, name: f.name, active: false },
   ];
   setEventBgm(true);
   showDialogueScene(portraits, s.playerName || 'タケル',
-    `${dateLabel}のライブに出てほしいんやけど、予定とかどう？`,
+    `${dateLabel}の${venue.name}でのライブに出てほしいんやけど、予定とかどう？`,
     dialogueChoices([
-      { label: '誘う', action: `confirmInviteGuest('${friendId}')` },
+      { label: `誘う(ギャラ${yen(gala)})`, action: `confirmInviteGuest('${friendId}')` },
       { label: 'やっぱりやめる', action: 'closeInviteScene()', cancel: true },
     ]),
     window.VENUE_OUTSIDE_BG);
@@ -2808,6 +2810,7 @@ function confirmInviteGuest(friendId) {
   ];
   const segments = [{ text: guestReplyLine(memberKey, reply.accepted, reply.dateLabel), type: 'neutral' }];
   if (reply.accepted) {
+    if (reply.gala) segments.push({ text: `ギャラ${yen(reply.gala)}を払った`, type: 'minus' });
     segments.push({
       text: `${reply.dateLabel}のライブに${reply.bandName ? reply.bandName + 'の' : ''}${reply.name}が出演してくれるようになった`,
       type: 'plus',
@@ -2858,10 +2861,12 @@ function screenFriend() {
     // 自分のバンドのメンバーは対バンの相手にならないので、誘う欄自体を出さない
     const isCandidate = GameActions.isGuestCandidate(f);
     const canInvite = GameActions.canInviteGuest(f.id);
+    const inviteGala = GameActions.guestInviteGala();
     const inviteReason = s.scheduledGuest
       ? `${s.scheduledGuest.name}が出演予定`
       : (s.condition === 'fever' ? '熱が下がってから'
-        : (iv < GameActions.GUEST_INVITE_MIN_INTIMACY ? `親密度${GameActions.GUEST_INVITE_MIN_INTIMACY}で誘える` : ''));
+        : (iv < GameActions.GUEST_INVITE_MIN_INTIMACY ? `親密度${GameActions.GUEST_INVITE_MIN_INTIMACY}で誘える`
+          : (s.money < inviteGala ? `ギャラ${yen(inviteGala)}が足りない` : '')));
     return `
       <div class="friend-card-wrap ${isCandidate ? '' : 'friend-card-solo'}">
         <button class="friend-card" onclick="friendDetailId='${f.id}';render();">
@@ -2881,7 +2886,7 @@ function screenFriend() {
         ${isCandidate ? `
         <div class="friend-invite-row">
           ${canInvite
-            ? `<button class="friend-invite-btn" onclick="inviteGuestScene('${f.id}')">対バンに誘う</button>`
+            ? `<button class="friend-invite-btn" onclick="inviteGuestScene('${f.id}')">対バンに誘う<span class="friend-invite-gala">${yen(inviteGala)}</span></button>`
             : `<span class="friend-invite-note">${inviteReason}</span>`}
           ${GameActions.canGuestRecord(f.id) ? '<span class="friend-invite-note friend-invite-note-gold">レコーディングにも呼べる</span>' : ''}
         </div>` : ''}
