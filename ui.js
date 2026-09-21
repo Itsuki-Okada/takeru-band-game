@@ -88,35 +88,47 @@ function setEventBgm(on) {
   updateBGM(currentTab);
 }
 
-// イベントらしい表示が画面に出ているか。
-// modalRootには吹き出し以外のモーダルと暗転(ワイプ)も入るので、ここを見れば
-// 「まだイベントの演出が続いている」かどうかが分かる。
-function eventVisualsOnScreen() {
-  if (dialogueState) return true;
-  if (modalQueue.length > 0) return true;
-  const root = document.getElementById('modalRoot');
-  if (root && root.innerHTML.trim() !== '') return true;
-  return false;
-}
-
 // イベントの表示がすべて終わっていれば通常BGMに戻す
 function endEventBgmIfIdle() {
   if (!bgmOverrideKey) return;
-  if (eventVisualsOnScreen()) return;
+  if (dialogueState) return;
+  if (modalQueue.length > 0) return;
+  const root = document.getElementById('modalRoot');
+  if (root && root.innerHTML.trim() !== '') return;
   setEventBgm(false);
 }
 
-// setEventBgm(true)の呼び出し口が多く、閉じ方によっては戻し忘れが起きるため、
-// 「何も出ていないのにイベントBGMのまま」という状態を定期的に拾って戻す。
-// 演出の切れ目で誤作動しないよう、2回続けてアイドルだった時だけ戻す。
-let bgmIdleTicks = 0;
-function watchEventBgm() {
-  if (!bgmOverrideKey) { bgmIdleTicks = 0; return; }
-  if (eventVisualsOnScreen()) { bgmIdleTicks = 0; return; }
-  bgmIdleTicks += 1;
-  if (bgmIdleTicks >= 2) { bgmIdleTicks = 0; setEventBgm(false); }
+// 画面に何も出ていない状態。演出の切れ目で誤作動しないよう、
+// 判定は2回続けてアイドルだった時だけ有効にする。
+function nothingOnScreen() {
+  if (dialogueState) return false;
+  const root = document.getElementById('modalRoot');
+  if (root && root.innerHTML.trim() !== '') return false;
+  return true;
 }
-setInterval(watchEventBgm, 700);
+
+// ポップアップのキューと、イベントBGMの戻し忘れをまとめて拾う見張り。
+//
+// modalQueueは「閉じる処理」がキューを1つ進めることで回っているが、
+// 吹き出しを dialogueState=null で直接消す箇所がいくつもあり、
+// そこを通るとキューに要素が残ったままになる。残ったままだと
+//   ・次のポップアップ(レコーディング完了など)が二度と出ない
+//   ・イベントBGMが「まだイベント中」と判定されて戻らない
+// という2つの症状が同時に出る。
+// 何も表示されていないのにキューが残っていたら、詰まりとみなして進める。
+let idleTicks = 0;
+function watchPopupsAndBgm() {
+  if (!nothingOnScreen()) { idleTicks = 0; return; }
+  idleTicks += 1;
+  if (idleTicks < 2) return;
+  idleTicks = 0;
+  if (modalQueue.length > 0) {
+    modalQueue.shift();
+    if (modalQueue.length > 0) { modalQueue[0](); return; }
+  }
+  if (bgmOverrideKey) setEventBgm(false);
+}
+setInterval(watchPopupsAndBgm, 700);
 
 let sfxObjects = {};
 
@@ -2269,7 +2281,7 @@ function screenLive() {
         <p class="progress-sub">会場: ${cv ? cv.name : '未定'}</p>
         <p class="progress-sub">予定日: ${turnToDateLabel(c.turn)}${isToday ? '(今日)' : ''}</p>
         <p class="progress-sub">ギャラ目安: ${yen(c.gala)}</p>
-        ${isToday ? `<div style="padding:8px 0 0;"><button class="rest-btn" onclick="dialogueState=null;friendOfferFlowState={offer:window.GameState.${offerVar},members:[]};setTab('friendlive');render();">会場へ向かう</button></div>` : ''}
+        ${isToday ? `<div style="padding:8px 0 0;"><button class="rest-btn" onclick="dialogueState=null;advanceModalQueueOnly();friendOfferFlowState={offer:window.GameState.${offerVar},members:[]};setTab('friendlive');render();">会場へ向かう</button></div>` : ''}
       </div>`;
       }).join('')}
       <div style="padding:0 14px;">
@@ -4483,7 +4495,7 @@ function liveDayBlockedScreen(actionLabel) {
   const message = collab ? `今日は${collab.name}との対バンの日。<br>まずは会場へ向かおう。` : '今日は定期ライブの日。<br>まずは会場へ向かおう。';
   const offerVar = collab && collab.who === 'ryohei' ? 'ryoheiPendingOffer' : 'takumaPendingOffer';
   const goAction = collab
-    ? `dialogueState=null;friendOfferFlowState={offer:window.GameState.${offerVar},members:[]};setTab('friendlive');render();`
+    ? `dialogueState=null;advanceModalQueueOnly();friendOfferFlowState={offer:window.GameState.${offerVar},members:[]};setTab('friendlive');render();`
     : "closeDialogueAndGoTo('live');";
   return `
     <div class="header"><span>${actionLabel}</span></div>
