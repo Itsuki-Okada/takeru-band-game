@@ -287,7 +287,7 @@ const VENUES = [
   { key: 'mid', name: '中規模ライブハウス', cost: 50000, capacity: 300, ticket: 333, minFame: 500, healthCost: 12 },
   { key: 'zepp', name: 'Zepp風会場', cost: 200000, capacity: 1000, ticket: 400, minFame: 5000, healthCost: 16 },
   { key: 'hall', name: 'ホール', cost: 500000, capacity: 2000, ticket: 500, minFame: 15000, healthCost: 20 },
-  { key: 'budokan', name: '武道館', cost: 1000000, capacity: 10000, ticket: 200, minFame: 50000, healthCost: 25 },
+  { key: 'budokan', name: '武道館', cost: 1000000, capacity: 10000, ticket: 200, minFame: 20000, healthCost: 25 },
 ];
 
 // 前回のライブからの間隔で客足が戻る(連続で打つと客が飽きる)
@@ -352,26 +352,32 @@ const PROMO_MAX_PER_MONTH = 1;
 let PROMO_POWER = 1;
 let SONG_STAT_WEIGHT = 0.72;   // 曲の完成度がステータスに対してどれだけ伸びるか
 function currentMonthIndex() { return Math.floor(state.turn / 4); }
+function promoMaxPerMonth() {
+  // 天才軍師(金): 月2回打てる
+  return PROMO_MAX_PER_MONTH + (abilityTier('strategy') >= 3 ? 1 : 0);
+}
 function promoLeftThisMonth() {
   const m = currentMonthIndex();
   const used = (state.promoMonth === m) ? (state.promoCountThisMonth || 0) : 0;
-  return Math.max(0, PROMO_MAX_PER_MONTH - used);
+  return Math.max(0, promoMaxPerMonth() - used);
 }
 function doPromotion(key) {
   const promo = PROMOTIONS.find(p => p.key === key);
   if (!promo) return;
   if (promoLeftThisMonth() <= 0) {
-    addLog('宣伝は1ヶ月に1回までです', 'neutral'); render(); return;
+    addLog(`宣伝は1ヶ月に${promoMaxPerMonth()}回までです`, 'neutral'); render(); return;
   }
   if (state.money < promo.cost) { notifyInsufficientFunds(); render(); return; }
   state.money -= promo.cost;
   let audienceGain = promo.audienceMin + Math.floor(Math.random() * (promo.audienceMax - promo.audienceMin + 1));
   // SNS映え◯: 宣伝の効きが良くなる
   const snsMult = hasAbility('sns') ? 1.4 : 1;
-  audienceGain = Math.round(audienceGain * snsMult * PROMO_POWER);
+  // 戦略家: 打ち方がうまくなり、同じ宣伝でも効き目が上がる
+  const strategyMult = 1 + abilityTier('strategy') * 0.22;
+  audienceGain = Math.round(audienceGain * snsMult * PROMO_POWER * strategyMult);
   state.liveExtraAudience = (state.liveExtraAudience || 0) + audienceGain;
-  const promoFame = Math.round(promo.fameGain * FAME_GROWTH * snsMult * PROMO_POWER);
-  const promoFollowers = Math.round(promo.followerGain * FAME_GROWTH * snsMult * PROMO_POWER);
+  const promoFame = Math.round(promo.fameGain * FAME_GROWTH * snsMult * PROMO_POWER * strategyMult);
+  const promoFollowers = Math.round(promo.followerGain * FAME_GROWTH * snsMult * PROMO_POWER * strategyMult);
   state.fame += promoFame;
   state.followers += promoFollowers;
   state.livePromoUsedTurn = state.turn;
@@ -1830,8 +1836,10 @@ function recordingCostMult() {
   return state.labelPerkBoost ? 0.65 : 0.75;   // 要求に応えていると割引が増える
 }
 function cdSalesMult() {
-  if (state.indieLabel !== 'orion') return 1;
-  return state.labelPerkBoost ? 1.25 : 1.15;
+  // 商才◯/青田買い: CDが売れやすくなる
+  const merchant = 1 + abilityTier('merchant') * 0.12;
+  const label = state.indieLabel !== 'orion' ? 1 : (state.labelPerkBoost ? 1.25 : 1.15);
+  return label * merchant;
 }
 function liveAudienceMult() {
   if (state.indieLabel !== 'elevenback') return 1;
@@ -2106,6 +2114,10 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
   };
   state.releases.unshift(release);
   const cm = conditionMult();
+  const guestNames = guestIds.map(id => {
+    const f = (state.friends || []).find(x => x.id === id);
+    return f ? f.name : id;
+  });
   const appliedExp = grantExp(rollExpFromRanges({ str: [10, 20], ski: [10, 20], int: [10, 20], men: [10, 20] }));
   // ゲストと一緒に録ると、そのぶん技術・精神の学びがある
   if (guestIds.length) {
@@ -2116,10 +2128,6 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
   }
   const memberNote = memberKeys.length ? ` / サポート${memberKeys.length}名雇用` : '';
   const producerNote = producerHired ? ' / プロデューサー起用' : '';
-  const guestNames = guestIds.map(id => {
-    const f = (state.friends || []).find(x => x.id === id);
-    return f ? f.name : id;
-  });
   const guestNote = guestNames.length ? ` / ゲスト: ${guestNames.join('・')}` : '';
   const discountNote = recordingCostMult() < 1 ? '(レーベルのレコーディング費用負担あり)' : '';
   addLog(`「${release.title}」(${type.name}/${songs.length}曲/${studio.name})を制作した${discountNote}(-${yen(totalCost)}${memberNote}${producerNote}${guestNote})`, 'minus');
@@ -2538,8 +2546,9 @@ function processGoodsSalesDaily() {
     const priceFactor = 1.3 - priceT * 0.9; // 安いほど売れやすい
     const demandFactor = Math.min(1.6, 0.3 + state.fame / 15000 + state.followers / 30000);
     const designFactor = hasDesign ? 1.25 : 1.0; // デザイン◯で売れ行きアップ
+    const merchantFactor = 1 + abilityTier('merchant') * 0.15; // 商才/青田買いで捌けが良くなる
 
-    const speed = Math.min(1, Math.max(0, (demandFactor * priceFactor * seasonFactor * designFactor - 0.3) / 1.3));
+    const speed = Math.min(1, Math.max(0, (demandFactor * priceFactor * seasonFactor * designFactor * merchantFactor - 0.3) / 1.3));
     const targetWeeks = Math.round(12 - speed * 8); // 需要が高いほど4週、低いほど12週に近づく
     const weeksLeftEstimate = Math.max(1, targetWeeks - (inv.weeksElapsed || 0));
     let units = Math.min(inv.remaining, Math.max(1, Math.round(inv.remaining / weeksLeftEstimate)));
@@ -2789,7 +2798,7 @@ window.GameActions = {
   AFTERPARTY_KING_TIMES, GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
   GUEST_INVITE_GALA, guestInviteGala, guestInviteVenue, COLLAB_INTIMACY_GAIN,
   FRIEND_KNACK, FRIEND_KNACK_CHANCE,
-  PROMO_MAX_PER_MONTH, promoLeftThisMonth,
+  PROMO_MAX_PER_MONTH, promoLeftThisMonth, promoMaxPerMonth,
   GUEST_INVITE_MIN_INTIMACY, canInviteGuest, isGuestCandidate, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
   learnSuperAbilityFrom, canLearnSuperFrom,
   resolveRyoheiRP3, scheduleRyoheiCollab, finalizeRecordingDay, resolveDrNasakenaiChoice, fleeAfterparty,

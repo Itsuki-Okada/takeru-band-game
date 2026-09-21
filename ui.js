@@ -1529,7 +1529,7 @@ function practiceConfirmScreen(menu) {
 
   // レベルのゲージ(次のレベルまであと何回か)
   const lvPips = Array.from({ length: 5 }, (_, i) =>
-    `<span class="pr-lv-pip ${i < pv.level ? 'pr-lv-pip-on' : ''}"></span>`).join('');
+    `<span class="pr-lv-pip ${i < (pv.levelUp ? pv.level - 1 : pv.level) ? 'pr-lv-pip-on' : ''}"></span>`).join('');
 
   const notes = [];
   if (pv.levelUp) notes.push({ t: `この練習でLv.${pv.level}にアップ！経験点が${pv.levelMult}倍に`, c: 'good' });
@@ -1549,7 +1549,7 @@ function practiceConfirmScreen(menu) {
       <div class="pr-hero-plate">
         <p class="pr-hero-name">${menu.name}</p>
         <div class="pr-lv-row">
-          <span class="pr-lv-badge">Lv.${pv.level}</span>
+          <span class="pr-lv-badge">Lv.${pv.levelUp ? pv.level - 1 : pv.level}</span>
           <span class="pr-lv-pips">${lvPips}</span>
           <span class="pr-lv-mult">経験点 ×${pv.levelMult}</span>
         </div>
@@ -1807,6 +1807,7 @@ function recordingPhaseImg(phaseKey, frame) {
     return chars.live[frame % chars.live.length];
   }
   const config = RECORDING_PHASE_CONFIG[phaseKey];
+  if (!config) return window.RECORDING_CHARS.vocal1;   // ゲストの出番など、定義外のフェーズ
   return window.RECORDING_CHARS[config.frames[frame]];
 }
 
@@ -1970,17 +1971,34 @@ function screenRecording() {
 const RECORDING_PART_HEIGHT = { drums: 175, bass: 140, keyboard: 148, guitar: 148, vocal: 148 };
 const PRODUCER_HEIGHT = 120;
 
+// 'guest:takuma' のようなフェーズキーから相手のIDを取り出す
+function recordingGuestOf(phaseKey) {
+  return (typeof phaseKey === 'string' && phaseKey.startsWith('guest:')) ? phaseKey.slice(6) : null;
+}
+function recordingGuestName(id) {
+  const s = window.GameState;
+  const f = (s.friends || []).find(x => x.id === id);
+  return (f && f.name) || (window.GameData.NPC_MEMBERS[id] || {}).name || id;
+}
+function recordingGuestImg(id, frame) {
+  const chars = window.MEMBER_CHARS && window.MEMBER_CHARS[id];
+  if (chars && Array.isArray(chars.live) && chars.live.length) return chars.live[frame % chars.live.length];
+  return (chars && chars.idle) || window.RECORDING_CHARS.vocal1;
+}
+
 function screenRecordingSession() {
   const rs = recordingSessionState;
   const phaseKey = rs.phases[rs.phaseIndex];
-  const config = RECORDING_PHASE_CONFIG[phaseKey];
+  const guestId = recordingGuestOf(phaseKey);
+  const config = RECORDING_PHASE_CONFIG[phaseKey] || { label: `${guestId ? recordingGuestName(guestId) : ''}がレコーディング中...` };
   const bg = window.STUDIO_BG[recordingState.studio];
   const charHeight = RECORDING_PART_HEIGHT[phaseKey] || 140;
   const producerHtml = recordingState.producer
     ? `<img src="${window.RECORDING_CHARS.producer}" class="recording-producer-img" style="height:${PRODUCER_HEIGHT}px;" />`
     : '';
   const guestIds = (rs.pendingParams && rs.pendingParams.guests) || [];
-  const guestHtml = guestIds.map(id => {
+  // 出番中のゲストは主役の位置に出すので、脇には並べない
+  const guestHtml = guestIds.filter(id => id !== guestId).map(id => {
     const chars = window.MEMBER_CHARS && window.MEMBER_CHARS[id];
     if (!chars) return '';
     const src = Array.isArray(chars.live) && chars.live.length ? chars.live[rs.frame % chars.live.length] : chars.idle;
@@ -1992,7 +2010,7 @@ function screenRecordingSession() {
       ${bgHud()}
       ${producerHtml}
       <div class="recording-guest-row">${guestHtml}</div>
-      <img id="recordingCharImg" src="${recordingPhaseImg(phaseKey, rs.frame)}" class="recording-char-img" style="height:${charHeight}px;" />
+      <img id="recordingCharImg" src="${guestId ? recordingGuestImg(guestId, rs.frame) : recordingPhaseImg(phaseKey, rs.frame)}" class="recording-char-img" style="height:${guestId ? 150 : charHeight}px;" />
     </div>
     <div class="progress-card" style="margin:10px 14px;">
       <p class="progress-title">${config.label}</p>
@@ -2046,6 +2064,8 @@ function confirmProduceCD() {
   const phases = RECORDING_MEMBER_ORDER.filter(k => recordingState.members.includes(k));
   phases.push('guitar');
   phases.push('vocal');
+  // 歌を録り終えたあと、ゲストの出番を1人ずつ入れる
+  (recordingState.guests || []).forEach(id => phases.push('guest:' + id));
 
   recordingSessionState = {
     active: true,
@@ -2076,7 +2096,8 @@ function runRecordingPhase() {
     const img = document.getElementById('recordingCharImg');
     if (img) {
       const phaseKey = recordingSessionState.phases[recordingSessionState.phaseIndex];
-      img.src = recordingPhaseImg(phaseKey, recordingSessionState.frame);
+      const gid = recordingGuestOf(phaseKey);
+      img.src = gid ? recordingGuestImg(gid, recordingSessionState.frame) : recordingPhaseImg(phaseKey, recordingSessionState.frame);
     }
   }, 450);
 
@@ -3550,7 +3571,7 @@ function dialogueBubbleInnerHtml() {
     <img src="${p.src}" class="dialogue-portrait-mini ${p.active ? 'dialogue-portrait-active' : ''} ${p.cls || ''}" />
   `).join('');
   return `
-    ${ds.portraits.length ? `<div class="dialogue-portrait-row-mini ${ds.portraits.length > 1 ? 'dialogue-portrait-row-duo' : ''} ${isAfterparty ? 'dialogue-portrait-row-afterparty' : ''} ${isHomeBg ? 'dialogue-portrait-row-home' : ''}">${portraitHtml}</div>` : ''}
+    ${ds.portraits.length ? `<div class="dialogue-portrait-row-mini ${ds.portraits.length > 1 ? 'dialogue-portrait-row-duo' : ''} ${ds.portraits.length >= 3 ? 'dialogue-portrait-row-trio' : ''} ${isAfterparty ? 'dialogue-portrait-row-afterparty' : ''} ${isHomeBg ? 'dialogue-portrait-row-home' : ''}">${portraitHtml}</div>` : ''}
     ${dialogueChoiceEchoHtml()}
     <div class="dialogue-command-slot" id="dialogueCommand" onclick="event.stopPropagation()">${dialogueCommandSlotHtml()}</div>
     <div class="dialogue-bubble-inline dialogue-bubble-fixed" onclick="advanceDialogue()">

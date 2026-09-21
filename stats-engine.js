@@ -185,6 +185,25 @@ const StatsEngine = (function () {
       unlockType: 'exp',
       tiers: [{ tier: 'normal', label: 'リズム感◯', cost: { str: 40, ski: 40 } }],
     },
+    strategy: {
+      name: '戦略家',
+      effect: '宣伝の効き目が上がる。「天才軍師」まで上げると宣伝を月2回打てるようになる',
+      unlockType: 'exp',
+      tiers: [
+        { tier: 'normal', label: '戦略家◯', cost: { int: 70 } },
+        { tier: 'great',  label: '戦略家◎', cost: { int: 150 } },
+        { tier: 'gold',   label: '天才軍師', cost: { int: 300 } },
+      ],
+    },
+    merchant: {
+      name: '商才',
+      effect: 'CDの売上とグッズの利益が増える',
+      unlockType: 'exp',
+      tiers: [
+        { tier: 'normal', label: '商才◯', cost: { int: 90 } },
+        { tier: 'gold',   label: '青田買い', cost: { int: 260 } },
+      ],
+    },
     afterparty: {
       knackKey: 'afterparty',
       name: '打ち上げ',

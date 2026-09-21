@@ -2489,6 +2489,12 @@
   /* 2人の時も中央揃え。以前は space-around + 左右24pxの余白だったが、
      キャラ2人(170px×2)が余白の内側に収まらず、右にはみ出して左右非対称になっていた。 */
   .dialogue-portrait-row-mini.dialogue-portrait-row-duo { justify-content:center; padding:0; }
+  /* 3人並ぶ時は、そのままだと画面幅に収まらず両端が見切れる。
+     少し小さくして間隔も詰め、3人とも入るようにする。 */
+  .dialogue-portrait-row-trio { gap:0; padding:0 2px; }
+  .dialogue-portrait-row-trio .dialogue-portrait-mini {
+    height:124px; margin:0 -6px; flex:0 1 auto; min-width:0;
+  }
   .dialogue-portrait-row-afterparty .dialogue-portrait-mini { opacity:1; filter:drop-shadow(0 5px 7px rgba(0,0,0,0.5)); }
   .dialogue-portrait-row-home .dialogue-portrait-mini { opacity:1; }
   /* イベント中のキャラは、場面が変わっても大きさが変わらないよう固定値にする。
@@ -3253,20 +3259,20 @@
       measurementId: "G-3FCH2Y6VSE",
     };
   </script>
-  <script>window.APP_VERSION = "120";</script>
-  <script src="firebase-service.js?v=120"></script>
-  <script src="icons.js?v=120"></script>
-  <script src="stats-engine.js?v=120"></script>
+  <script>window.APP_VERSION = "121";</script>
+  <script src="firebase-service.js?v=121"></script>
+  <script src="icons.js?v=121"></script>
+  <script src="stats-engine.js?v=121"></script>
   <!-- 効果音(WebAudioで合成。音声ファイルは持たない) -->
-  <script src="sfx.js?v=120"></script>
-  <script src="game.js?v=120"></script>
-  <script src="ui.js?v=120"></script>
+  <script src="sfx.js?v=121"></script>
+  <script src="game.js?v=121"></script>
+  <script src="ui.js?v=121"></script>
   <!-- エンディングだけを確認するためのプレビュー(index.html?ending=1)。
        パラメータが無ければ何もしない。不要になればこの1行とending-preview.jsを消すだけでよい。 -->
-  <script src="keiba.js?v=120"></script>
-  <script src="ending-preview.js?v=120"></script>
+  <script src="keiba.js?v=121"></script>
+  <script src="ending-preview.js?v=121"></script>
   <!-- 選択肢のあるイベントだけを確認するためのプレビュー(index.html?event=1)。
        パラメータが無ければ何もしない。不要になればこの1行とevent-preview.jsを消すだけでよい。 -->
-  <script src="event-preview.js?v=120"></script>
+  <script src="event-preview.js?v=121"></script>
 </body>
 </html>
