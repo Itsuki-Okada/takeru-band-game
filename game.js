@@ -757,6 +757,8 @@ function checkTakumaMeeting() {
 
 // 10杯飲み切るのをこの回数こなすと「打ち上げ王」のコツが手に入る
 const AFTERPARTY_KING_TIMES = 5;
+// 打ち上げ王の1杯あたりの失敗率。10杯通しで約90%成功になる値。
+const AFTERPARTY_KING_VOMIT = 1 - Math.pow(0.9, 1 / 10);
 const RP3_NAG_INTERVAL = 4;   // 借金を踏み倒した後、また催促してくるまでの週数
 
 // ===== フレンドから受け継ぐコツ =====
@@ -2399,11 +2401,11 @@ function doLive(memberKeys, opts) {
 }
 
 // ===== 打ち上げ =====
+// 打ち上げの成果。体力は杯数に関わらず一律で減る。
 const AFTERPARTY_TIERS = [
-  { max: 2, expMin: 5, expMax: 10, intimacy: -5, health: 10 },   // 0〜2杯
-  { max: 6, expMin: 10, expMax: 20, intimacy: 5, health: -5 },   // 3〜6杯
-  { max: 9, expMin: 20, expMax: 25, intimacy: 5, health: -10 },  // 7〜9杯
-  { max: 10, expMin: 30, expMax: 30, intimacy: 10, health: -15 }, // 10杯
+  { max: 4,  expMin: 5,  expMax: 5,  intimacy: -5, health: -10 },  // 4杯以下: 付き合いが悪い
+  { max: 9,  expMin: 10, expMax: 10, intimacy: 10, health: -10 },  // 5〜9杯
+  { max: 10, expMin: 20, expMax: 20, intimacy: 10, health: -10 },  // 10杯飲み切り
 ];
 function getAfterpartyTier(drinks) {
   return AFTERPARTY_TIERS.find(t => drinks <= t.max) || AFTERPARTY_TIERS[AFTERPARTY_TIERS.length - 1];
@@ -2421,8 +2423,11 @@ function drinkAtAfterparty() {
   // 吐く確率: 2%からスタートし、飲むほど上昇(8杯目あたりで約10%)
   // 打ち上げ◯を持っていると吐きにくい。打ち上げ王なら一切吐かない。
   const apTier = abilityTier('afterparty');
-  const vomitMult = apTier >= 3 ? 0 : (apTier >= 1 ? 0.4 : 1);
-  const vomitChance = Math.min(0.35, (0.02 + Math.max(0, ap.drinks - 1) * 0.011) * vomitMult);
+  // 打ち上げ王: 一切吐かない → 「10杯飲み切れる確率が約90%」に下方修正。
+  // 1杯ごとの確率を一定(約1.05%)にすると、10杯通しで 0.9 になる。
+  const vomitChance = apTier >= 3
+    ? AFTERPARTY_KING_VOMIT
+    : Math.min(0.35, (0.02 + Math.max(0, ap.drinks - 1) * 0.011) * (apTier >= 1 ? 0.4 : 1));
   const vomited = Math.random() < vomitChance;
   if (vomited) ap.vomited = true;
   return { vomited, done: vomited || ap.drinks >= 10, drinks: ap.drinks };
@@ -2484,17 +2489,16 @@ function finishAfterparty() {
   }
 
   let hungover = false;
-  if (vomited) {
-    addLog('飲みすぎて吐いてしまった…', 'minus');
-    // 吐いた場合、確率で二日酔いになり翌日は体調不良になる(仮の確率: 50%)
-    // 柔軟性◯: 悪い効果を少し打ち消す
-    const hangoverChance = hasAbility('flex') ? 0.25 : 0.5;
-    if (Math.random() < hangoverChance) {
-      hungover = true;
-      if (state.condition !== 'fever') state.condition = 'cold';
-      state.hungover = true;
-      addLog('二日酔いになってしまった…翌日は体調が優れない', 'minus');
-    }
+  if (vomited) addLog('飲みすぎて吐いてしまった…', 'minus');
+  // 二日酔いは「どれだけ飲んだか」で決まる。1杯につき5%、吐いていればさらに+20%。
+  // 柔軟性◯: 悪い効果を半分に抑える
+  let hangoverChance = Math.min(0.5, drinks * 0.05) + (vomited ? 0.2 : 0);
+  if (hasAbility('flex')) hangoverChance *= 0.5;
+  if (drinks > 0 && Math.random() < hangoverChance) {
+    hungover = true;
+    if (state.condition !== 'fever') state.condition = 'cold';
+    state.hungover = true;
+    addLog('二日酔いになってしまった…翌日は体調が優れない', 'minus');
   }
 
   state.afterpartyState = null;

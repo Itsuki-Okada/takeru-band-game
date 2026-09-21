@@ -2189,7 +2189,7 @@ const VENUE_STAGE_BOTTOM = {
   mid: '12%',
   zepp: '18%',
   hall: '15%',
-  budokan: '22%',
+  budokan: '14%',
 };
 const LIVE_CHAR_FRAMES = {
   bass: ['bass', 'bass_smile'],
