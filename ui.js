@@ -2240,11 +2240,11 @@ function screenLive() {
     // 誘われた対バン(たくま・りょーぺ)の予定。片方だけの表示になっていたので両方出す。
     const collabCards = [];
     if (s.ryoheiEvents && s.ryoheiEvents.firstCollabScheduled && s.ryoheiPendingOffer) {
-      collabCards.push({ name: 'りょーぺ', band: s.ryoheiPendingOffer.bandName || 'アフターワーク',
+      collabCards.push({ who: 'ryohei', name: 'りょーぺ', band: s.ryoheiPendingOffer.bandName || 'アフターワーク',
         venueKey: s.ryoheiPendingOffer.venueKey, turn: s.ryoheiEvents.firstCollabTurn, gala: s.ryoheiPendingOffer.gala });
     }
     if (s.takumaEvents && s.takumaEvents.collabPending && s.takumaPendingOffer) {
-      collabCards.push({ name: 'たくま', band: s.takumaPendingOffer.bandName || 'KAME',
+      collabCards.push({ who: 'takuma', name: 'たくま', band: s.takumaPendingOffer.bandName || 'KAME',
         venueKey: s.takumaPendingOffer.venueKey, turn: s.takumaEvents.collabTurn, gala: s.takumaPendingOffer.gala });
     }
     return `
@@ -2260,12 +2260,16 @@ function screenLive() {
       </div>
       ${collabCards.map(c => {
         const cv = window.GameData.VENUES.find(v => v.key === c.venueKey);
+        // 当日になったら、この画面からそのまま会場へ向かえるようにする
+        const isToday = c.turn != null && s.turn >= c.turn;
+        const offerVar = c.who === 'ryohei' ? 'ryoheiPendingOffer' : 'takumaPendingOffer';
         return `
       <div class="progress-card" style="margin:10px 14px;">
         <p class="progress-title">対バン予定: ${c.name}(${c.band})</p>
         <p class="progress-sub">会場: ${cv ? cv.name : '未定'}</p>
-        <p class="progress-sub">予定日: ${turnToDateLabel(c.turn)}</p>
+        <p class="progress-sub">予定日: ${turnToDateLabel(c.turn)}${isToday ? '(今日)' : ''}</p>
         <p class="progress-sub">ギャラ目安: ${yen(c.gala)}</p>
+        ${isToday ? `<div style="padding:8px 0 0;"><button class="rest-btn" onclick="dialogueState=null;friendOfferFlowState={offer:window.GameState.${offerVar},members:[]};setTab('friendlive');render();">会場へ向かう</button></div>` : ''}
       </div>`;
       }).join('')}
       <div style="padding:0 14px;">

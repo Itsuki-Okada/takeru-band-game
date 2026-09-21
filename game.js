@@ -353,8 +353,7 @@ let PROMO_POWER = 1;
 let SONG_STAT_WEIGHT = 0.72;   // 曲の完成度がステータスに対してどれだけ伸びるか
 function currentMonthIndex() { return Math.floor(state.turn / 4); }
 function promoMaxPerMonth() {
-  // 天才軍師(金): 月2回打てる
-  return PROMO_MAX_PER_MONTH + (abilityTier('strategy') >= 3 ? 1 : 0);
+  return PROMO_MAX_PER_MONTH;
 }
 function promoLeftThisMonth() {
   const m = currentMonthIndex();
@@ -372,8 +371,8 @@ function doPromotion(key) {
   let audienceGain = promo.audienceMin + Math.floor(Math.random() * (promo.audienceMax - promo.audienceMin + 1));
   // SNS映え◯: 宣伝の効きが良くなる
   const snsMult = hasAbility('sns') ? 1.4 : 1;
-  // 戦略家: 打ち方がうまくなり、同じ宣伝でも効き目が上がる
-  const strategyMult = 1 + abilityTier('strategy') * 0.22;
+  // 戦略家: 打ち方がうまくなり、同じ宣伝でも効き目が上がる(◯+10% / ◎+20% / 天才軍師+30%)
+  const strategyMult = 1 + abilityTier('strategy') * 0.10;
   audienceGain = Math.round(audienceGain * snsMult * PROMO_POWER * strategyMult);
   state.liveExtraAudience = (state.liveExtraAudience || 0) + audienceGain;
   const promoFame = Math.round(promo.fameGain * FAME_GROWTH * snsMult * PROMO_POWER * strategyMult);
@@ -1984,30 +1983,34 @@ function doPracticeSession(key, useCoupon) {
   state.money -= cost;
   if (applyCoupon) state.practiceCoupon = null;
 
-  const cm = conditionMult();
-  // 旧ステータス(skills)の成長は廃止。練習の成果は経験点に一本化する。
-
-  // 練習レベル(1〜5): 5回行うごとに1つ上がり、経験点の獲得量が増える
-  state.practiceCount = state.practiceCount || {};
+  // 決定画面に出した「獲得予定」とズレないよう、表示と同じ関数で倍率を出し、
+  // その範囲の中で実際の値を決める(表示と実際で別々に計算しない)。
+  const pv = practicePreview(key);
   const prevLevel = getPracticeLevel(key);
+
+  state.practiceCount = state.practiceCount || {};
   state.practiceCount[key] = (state.practiceCount[key] || 0) + 1;
   const newLevel = getPracticeLevel(key);
-  const levelMult = PRACTICE_LEVEL_MULTIPLIER[newLevel - 1];
-  const rolledBase = rollExpFromRanges(menu.expGain);
+
   // 飽き性×: 同じ練習を連続すると効果が落ちる(別の練習を挟めば戻る)
-  let boredMult = 1;
   if (hasAbility('fickle')) {
     const streak = state.lastPracticeKey === key ? (state.practiceStreak || 0) + 1 : 0;
     state.practiceStreak = streak;
-    boredMult = Math.max(0.5, 1 - streak * 0.18);
     if (streak > 0) addLog('同じ練習に飽きてきた…', 'minus');
   }
   state.lastPracticeKey = key;
+
+  // 予測の[最小,最大]の中から実際の獲得量を引く。倍率は既に織り込み済みなので
+  // ここで重ねて掛けない(以前はここでもう一度掛けていて表示と食い違っていた)。
   const scaledExpGain = {};
-  Object.keys(rolledBase).forEach(cat => {
-    scaledExpGain[cat] = Math.round(rolledBase[cat] * levelMult * boredMult);
+  Object.keys(pv.exp).forEach(cat => {
+    const [lo, hi] = pv.exp[cat];
+    scaledExpGain[cat] = randInRange(lo, hi);
   });
-  grantExp(scaledExpGain);
+  StatsEngine.gainExp(state.expPool, scaledExpGain);
+  Object.keys(scaledExpGain).forEach(cat => {
+    if (scaledExpGain[cat] > 0) addLog(`${StatsEngine.EXP_CATEGORY_NAMES[cat]}経験点を${scaledExpGain[cat]}得た`, 'plus');
+  });
   if (newLevel > prevLevel) {
     addLog(`${menu.name}のレベルが${newLevel}に上がった！`, 'plus');
   }

@@ -149,14 +149,24 @@ const StatsEngine = (function () {
   }
 
   // ---- 総合ランク(5ステータス平均+特殊能力ボーナス) ----
+  // 特殊能力の査定(総合力への加算)。
+  // 能力は全部で27種あるので、1つあたりを大きくすると
+  // 「能力を集めるだけでSランク」になってしまう。ステータスを伸ばす道と
+  // 釣り合う程度に抑えている。
+  let ABILITY_ASSESS = { normal: 0.5, great: 1, gold: 2, super: 8 };
+  function setAbilityAssess(v) { ABILITY_ASSESS = Object.assign({}, ABILITY_ASSESS, v || {}); }
+  function abilityAssessValue(def, tier) {
+    if (def && def.super) return ABILITY_ASSESS.super;
+    return ABILITY_ASSESS[tier] || 0;
+  }
+
   function calcOverallScore(state) {
     const statAvg = STAT_ORDER.reduce((sum, k) => sum + (state.stats[k] || 0), 0) / STAT_ORDER.length;
     const abilityBonus = (state.abilities || []).reduce((sum, a) => {
       const def = ABILITIES[a.key];
-      // 超特殊能力は査定が大きい
-      const bonus = (def && def.super) ? 10 : ({ normal: 2, great: 4, gold: 8 }[a.tier] || 0);
-      // マイナス能力は総合力を下げる
-      return sum + (def && def.negative ? -bonus : bonus);
+      const bonus = abilityAssessValue(def, a.tier);
+      // マイナス能力は総合力を下げる(こちらは重めに効く)
+      return sum + (def && def.negative ? -(bonus * 2) : bonus);
     }, 0);
     return statAvg + abilityBonus;
   }
@@ -187,7 +197,7 @@ const StatsEngine = (function () {
     },
     strategy: {
       name: '戦略家',
-      effect: '宣伝の効き目が上がる。「天才軍師」まで上げると宣伝を月2回打てるようになる',
+      effect: '宣伝の効き目が上がる(◯+10% / ◎+20% / 天才軍師+30%)',
       unlockType: 'exp',
       tiers: [
         { tier: 'normal', label: '戦略家◯', cost: { int: 70 } },
@@ -573,6 +583,7 @@ const StatsEngine = (function () {
     getRank, getRankIndex, pointCost, setCostCurve,
     gainExp, getExpMultiplier, applyMultiplier,
     KNACK_MAX_LEVEL, knackLevel, knackDiscount, bestKnackLevel, abilityNextCost,
+    ABILITY_ASSESS, setAbilityAssess, abilityAssessValue,
     raiseStat, calcOverallScore, getOverallRank,
     tryUnlockAbility, hasSense, grantRandomNegative, rollStartingAbility,
     FRIENDSHIP_ABILITY_REQUIRED, superAbilityFor, canLearnSuperAbility, learnSuperAbility,
