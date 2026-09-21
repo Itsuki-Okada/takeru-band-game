@@ -77,7 +77,8 @@ const state = {
   liveDayAnnounced: false,
   peakFame: 0,               // これまでの最高知名度(減衰の下限に使う)
   peakFollowers: 0,
-  scheduledGuest: null,      // 次の定期ライブに出てもらうフレンド
+  scheduledGuests: [],       // 次の定期ライブに出てもらうフレンド(たくま/りょーぺ 最大2組)
+  guestAskedThisLive: {},    // 今回の定期ライブで誘いをかけた相手(断られても再挑戦できない)
   justLiveCancelled: null,   // 熱で中止になった時の通知
   justGuestReply: null,      // 対バンに誘った返事
   justSuperAbility: null,    // 超特殊能力を覚えた時の通知
@@ -85,7 +86,8 @@ const state = {
   lastLiveTurn: null,       // 直近でライブを打ったターン(客足の回復に使う)
   bestAudience: 0,          // 1回のライブで集めた最高動員(メジャーの条件に使う)
   livePromoUsedTurn: null,  // 直近で宣伝を行ったターン(週1回まで)
-  promoCountThisLive: 0,    // 次のライブまでに宣伝した回数
+  promoMonth: null,         // 宣伝した月(1ヶ月に1回の判定用)
+  promoCountThisMonth: 0,
   liveExtraAudience: 0,     // 宣伝で積み上がった追加来場数
   justCollabLive: null,
   justFriendOffer: null,
@@ -204,12 +206,11 @@ function practicePreview(key) {
       Math.max(0, Math.round(Math.round(hi * levelMult * boredMult) * expMult)),
     ];
   });
-  const skillGain = [Math.max(1, Math.round(1 * cm.skill)), Math.max(1, Math.round(3 * cm.skill))];
   const couponValid = !!(state.practiceCoupon && state.turn <= state.practiceCoupon.expiryTurn);
   return {
     key, name: menu.name, level, levelUp, toNextLevel, levelMult, boredMult, expMult,
     motivation: StatsEngine.MOTIVATION_LEVELS[currentMotivationIndex()],
-    exp, stats: menu.stats.slice(), skillGain,
+    exp,
     cost: menu.cost, halfCost: Math.round(menu.cost / 2), couponValid,
     healthCost: menu.healthCost, condition: state.condition,
     stamps: state.practiceStamps || 0, stampsNeeded: PRACTICE_STAMPS_FOR_COUPON,
@@ -345,32 +346,42 @@ const PROMOTIONS = [
   { key: 'ad', name: 'SNS広告', cost: 10000, audienceMin: 8, audienceMax: 14, fameGain: 75, followerGain: 60 },
 ];
 
-const PROMO_COOLDOWN_TURNS = 2; // 宣伝は2週間に1回まで
-const PROMO_MAX_PER_LIVE = 2;   // 次のライブまでに打てる宣伝の回数
+// 宣伝は1ヶ月(4週)に1回まで
+const PROMO_MAX_PER_MONTH = 1;
+// 月1回しか打てないぶん、1回の効き目を大きくする
+let PROMO_POWER = 1.6;
+let SONG_STAT_WEIGHT = 0.72;   // 曲の完成度がステータスに対してどれだけ伸びるか
+function currentMonthIndex() { return Math.floor(state.turn / 4); }
+function promoLeftThisMonth() {
+  const m = currentMonthIndex();
+  const used = (state.promoMonth === m) ? (state.promoCountThisMonth || 0) : 0;
+  return Math.max(0, PROMO_MAX_PER_MONTH - used);
+}
 function doPromotion(key) {
   const promo = PROMOTIONS.find(p => p.key === key);
   if (!promo) return;
-  if ((state.promoCountThisLive || 0) >= PROMO_MAX_PER_LIVE) {
-    addLog(`次のライブまでに宣伝できるのはあと0回です`, 'neutral'); render(); return;
-  }
-  if (state.livePromoUsedTurn !== null && (state.turn - state.livePromoUsedTurn) < PROMO_COOLDOWN_TURNS) {
-    addLog(`宣伝は${PROMO_COOLDOWN_TURNS}週間に1回までです`, 'neutral'); render(); return;
+  if (promoLeftThisMonth() <= 0) {
+    addLog('宣伝は1ヶ月に1回までです', 'neutral'); render(); return;
   }
   if (state.money < promo.cost) { notifyInsufficientFunds(); render(); return; }
   state.money -= promo.cost;
   let audienceGain = promo.audienceMin + Math.floor(Math.random() * (promo.audienceMax - promo.audienceMin + 1));
   // SNS映え◯: 宣伝の効きが良くなる
   const snsMult = hasAbility('sns') ? 1.4 : 1;
-  audienceGain = Math.round(audienceGain * snsMult);
+  audienceGain = Math.round(audienceGain * snsMult * PROMO_POWER);
   state.liveExtraAudience = (state.liveExtraAudience || 0) + audienceGain;
-  state.fame += Math.round(promo.fameGain * FAME_GROWTH * snsMult);
-  state.followers += Math.round(promo.followerGain * FAME_GROWTH * snsMult);
+  const promoFame = Math.round(promo.fameGain * FAME_GROWTH * snsMult * PROMO_POWER);
+  const promoFollowers = Math.round(promo.followerGain * FAME_GROWTH * snsMult * PROMO_POWER);
+  state.fame += promoFame;
+  state.followers += promoFollowers;
   state.livePromoUsedTurn = state.turn;
-  state.promoCountThisLive = (state.promoCountThisLive || 0) + 1;
+  const pm = currentMonthIndex();
+  if (state.promoMonth !== pm) { state.promoMonth = pm; state.promoCountThisMonth = 0; }
+  state.promoCountThisMonth = (state.promoCountThisMonth || 0) + 1;
   addLog(`${promo.name}を実施した${promo.cost > 0 ? `(-${yen(promo.cost)})` : '(無料)'}`, promo.cost > 0 ? 'minus' : 'neutral');
   addLog(`来場数が${audienceGain}人増える見込み`, 'plus');
-  addLog(`知名度が${promo.fameGain}増えた`, 'plus');
-  addLog(`フォロワーが${promo.followerGain}増えた`, 'plus');
+  addLog(`知名度が${promoFame}増えた`, 'plus');
+  addLog(`フォロワーが${promoFollowers}増えた`, 'plus');
   render();
 }
 
@@ -785,7 +796,9 @@ function canGuestRecord(friendId) {
 }
 
 function canInviteGuest(friendId) {
-  if (state.scheduledGuest) return false;                 // 1回のライブにつき1組
+  // 1回の定期ライブにつき、相手ごとに1度だけ。断られても次のライブまで誘い直せない。
+  if ((state.guestAskedThisLive || {})[friendId]) return false;
+  if ((state.scheduledGuests || []).some(g => g.id === friendId)) return false;
   if (state.condition === 'fever') return false;
   const f = state.friends.find(x => x.id === friendId);
   if (!isGuestCandidate(f)) return false;
@@ -808,18 +821,21 @@ function inviteGuestToLive(friendId) {
   const npc = NPC_MEMBERS[f.memberKey || f.id] || {};
   const accepted = Math.random() < guestAcceptChance(f.intimacy);
   const liveTurn = state.nextLiveTurn;
+  state.guestAskedThisLive = state.guestAskedThisLive || {};
+  state.guestAskedThisLive[friendId] = true;   // 受けても断られても、このライブではもう誘えない
   const inviteVenue = guestInviteVenue();
   const gala = guestInviteGala(inviteVenue.key);
   if (accepted) {
     // 断られた場合はギャラは発生しない
     state.money -= gala;
     addLog(`${f.name}(${f.bandName || npc.bandName || ''})へのギャラ${yen(gala)}を払った(${inviteVenue.name})`, 'minus');
-    state.scheduledGuest = {
+    state.scheduledGuests = state.scheduledGuests || [];
+    state.scheduledGuests.push({
       id: f.id, memberKey: f.memberKey || f.id,
       name: f.name, bandName: f.bandName || npc.bandName || '',
       fame: npc.fame || f.fame || 0, followers: npc.followers || f.followers || 0,
       turn: liveTurn,
-    };
+    });
     addIntimacy(f, 3);
     addLog(`${turnToDateLabel(liveTurn)}のライブに${f.name}が出演してくれることになった！`, 'plus');
   } else {
@@ -846,12 +862,13 @@ function cancelScheduledLive() {
   state.justLiveDayArrived = null;
   state.nextLiveTurn = state.turn + LIVE_INTERVAL_TURNS;
   // 予約していた対バン相手も一緒に流れる
-  const guest = state.scheduledGuest;
-  state.scheduledGuest = null;
+  const cancelledGuests = (state.scheduledGuests || []).slice();
+  state.scheduledGuests = [];
+  state.guestAskedThisLive = {};   // ライブごと流れたので、次のライブでは誘い直せる
   state.justLiveCancelled = {
     venueName: venue.name, fee: paid,
     shortOfMoney: paid < fee,
-    guestName: guest ? guest.name : null,
+    guestName: cancelledGuests.length ? cancelledGuests.map(g => g.name).join('・') : null,
     nextLabel: turnToDateLabel(state.turn + LIVE_INTERVAL_TURNS),
   };
   addLog(`熱のため${venue.name}での定期ライブを中止した(キャンセル料-${yen(paid)})`, 'minus');
@@ -1030,6 +1047,14 @@ function finalizeFriendOfferLive(offer, memberKeys) {
     state.takumaEvents.collabTurn = null;
     state.takumaEvents.collabAnnounced = false;
     state.takumaPendingOffer = null;
+  }
+  // りょーぺ側も同じように解除する。これを忘れると予約が残り続け、
+  // 毎週「りょーぺとの対バンの日」になってしまう。
+  if (offer.friendId === 'ryohei') {
+    state.ryoheiEvents.firstCollabScheduled = false;
+    state.ryoheiEvents.firstCollabTurn = null;
+    state.ryoheiEvents.firstCollabAnnounced = false;
+    state.ryoheiPendingOffer = null;
   }
   // 一緒にステージに立ったぶん、相手との距離が縮まる
   let collabIntimacyGain = 0;
@@ -1309,7 +1334,11 @@ function hostCollabLive(friendId, venueKey, memberKeys) {
 
 // ===== ユーティリティ =====
 const yen = n => '¥' + Math.round(n).toLocaleString();
-const avgSkill = () => Object.values(state.skills).reduce((a, b) => a + b, 0) / 5;
+// ライブの出来に使う「演奏面の平均」。skillsの成長を廃止したので実ステータスから出す。
+const avgSkill = () => {
+  const st = state.stats || {};
+  return ((st.vocal || 0) + (st.play || 0) + (st.performance || 0)) / 3;
+};
 
 // ===== ターン(週)制の日付システム =====
 // 1回の行動(アルバイト・練習など)ごとに1週間が経過する。
@@ -1689,8 +1718,9 @@ function finalizeSongProduction() {
   state.genreMastery = state.genreMastery || {};
   const mastery = state.genreMastery[draft.genre] || 0;
   const masteryBonus = (mastery / 100) * 18; // 熟練度MAXで+18点相当
-  const composeStat = (state.stats && state.stats.compose) || 0;
-  const base = (state.skills.compose * 1.5 + state.skills.vocal + state.skills.guitar) / 3 + composeStat * 0.3 + masteryBonus;
+  const st = state.stats || {};
+  // skillsの成長を廃止したので、実際に育つ5ステータスから完成度を出す
+  const base = ((st.compose || 0) * 1.5 + (st.vocal || 0) + (st.play || 0)) / 3 * SONG_STAT_WEIGHT + masteryBonus;
   // 集中力◯: 出来のブレ幅が小さくなり、低い完成度を引きにくくなる
   const spread = hasAbility('focus') ? 10 : 20;
   const offset = hasAbility('focus') ? 0 : -5;
@@ -1913,11 +1943,7 @@ function doPracticeSession(key, useCoupon) {
   if (applyCoupon) state.practiceCoupon = null;
 
   const cm = conditionMult();
-  menu.stats.forEach(statKey => {
-    const raw = 1 + Math.floor(Math.random() * 3);
-    const gain = Math.max(1, Math.round(raw * cm.skill));
-    state.skills[statKey] += gain;
-  });
+  // 旧ステータス(skills)の成長は廃止。練習の成果は経験点に一本化する。
 
   // 練習レベル(1〜5): 5回行うごとに1つ上がり、経験点の獲得量が増える
   state.practiceCount = state.practiceCount || {};
@@ -2164,8 +2190,11 @@ function doLive(memberKeys, opts) {
   // 集客: 自分の集客力(=呼べる人数)に、出来・サポート・宣伝を乗せる。
   // 会場のキャパは「上限」であって、キャパが大きいから客が増えるわけではない。
   // 対バンのゲストが出てくれる回は、相手の客も来るぶん集客が伸びる
-  const guest = (!isExtra && state.scheduledGuest && state.scheduledGuest.turn <= state.turn) ? state.scheduledGuest : null;
-  const guestBonus = guest ? (1 + Math.min(0.45, (guest.fame || 0) / 3000 * 0.15)) : 1;
+  const guests = (!isExtra ? (state.scheduledGuests || []) : []).filter(g => g.turn <= state.turn);
+  const guest = guests[0] || null;   // 従来の単数参照との互換用
+  // 出てくれた相手のぶんだけ客が増える。2組でも青天井にはしない。
+  const guestFameSum = guests.reduce((a, g) => a + (g.fame || 0), 0);
+  const guestBonus = guests.length ? (1 + Math.min(0.60, guestFameSum / 3000 * 0.15)) : 1;
   const draw = calcDrawPower() * memberBonus * guestBonus * (0.75 + performanceFinal / 250);
   const promoAudience = state.liveExtraAudience || 0;
   const audience = Math.max(0, Math.min(venue.capacity, Math.round((draw + promoAudience) * liveAudienceMult())));
@@ -2213,18 +2242,26 @@ function doLive(memberKeys, opts) {
     flopped ? 'minus' : (profit >= 0 ? 'plus' : 'minus'));
   state.justPlayedLive = { venueKey: venue.key, venueName: venue.name, audience, revenue, profit, fameGain, performanceFinal,
     capacity: venue.capacity, fill, flopped, isExtra, venueCost, appliedExp: liveExp,
-    guestName: guest ? guest.name : null, guestBand: guest ? guest.bandName : null };
-  if (guest) {
-    const gf = state.friends.find(x => x.id === guest.id);
-    if (gf) {
-      const before = gf.intimacy || 0;
-      addIntimacy(gf, COLLAB_INTIMACY_GAIN);   // 一緒に出たぶん大きく縮まる
-      const gained = (gf.intimacy || 0) - before;
-      state.justPlayedLive.guestIntimacyGain = gained;
-      if (gained > 0) addLog(`${gf.name}との親密度が${gained}上がった`, 'plus');
-    }
-    addLog(`${guest.name}(${guest.bandName})が対バンしてくれた！`, 'plus');
-    state.scheduledGuest = null;
+    guestName: guest ? guest.name : null, guestBand: guest ? guest.bandName : null,
+    guests: guests.map(g => ({ id: g.id, memberKey: g.memberKey, name: g.name, bandName: g.bandName })) };
+  if (guests.length) {
+    state.justPlayedLive.guestIntimacy = [];
+    guests.forEach(g => {
+      const gf = state.friends.find(x => x.id === g.id);
+      if (gf) {
+        const before = gf.intimacy || 0;
+        addIntimacy(gf, COLLAB_INTIMACY_GAIN);   // 一緒に出たぶん大きく縮まる
+        const gained = (gf.intimacy || 0) - before;
+        if (gained > 0) {
+          state.justPlayedLive.guestIntimacy.push({ name: gf.name, gained });
+          addLog(`${gf.name}との親密度が${gained}上がった`, 'plus');
+        }
+      }
+      addLog(`${g.name}(${g.bandName})が対バンしてくれた！`, 'plus');
+    });
+    if (guests.length === 1) state.justPlayedLive.guestIntimacyGain = (state.justPlayedLive.guestIntimacy[0] || {}).gained || 0;
+    // 出演済みのゲストを消化する
+    state.scheduledGuests = (state.scheduledGuests || []).filter(g => g.turn > state.turn);
   }
   let rp1JustTriggered = false;
   if (!state.ryoheiEvents.rp1Done) {
@@ -2261,7 +2298,7 @@ function doLive(memberKeys, opts) {
   }
   state.liveExtraAudience = 0;
   state.livePromoUsedTurn = null;
-  state.promoCountThisLive = 0;
+  state.guestAskedThisLive = {};
 
   advanceWeek();
   render();
@@ -2341,9 +2378,8 @@ function finishAfterparty() {
       state.knacks.afterparty = afterLv;
       state.afterpartyKnackGained = { level: afterLv, off: Math.round((1 - StatsEngine.knackDiscount(afterLv)) * 100) };
       addLog(`打ち上げのコツがLv.${afterLv}になった(必要経験点が${state.afterpartyKnackGained.off}%引き)`, 'plus');
-    } else {
-      addLog('10杯飲み切った', 'plus');
     }
+    // すでにLv5(上限)なら、コツについては何も出さない
     if (state.tenDrinkCount >= AFTERPARTY_KING_TIMES && !state.knacks.afterpartyKing) {
       state.knacks.afterpartyKing = true;
       addLog(`10杯飲み切るのを${AFTERPARTY_KING_TIMES}回達成！「打ち上げ王」のコツをつかんだ`, 'money');
@@ -2554,7 +2590,10 @@ function resetGameState() {
   state.liveDayAnnounced = false;
   state.peakFame = 0;
   state.peakFollowers = 0;
-  state.scheduledGuest = null;
+  state.scheduledGuests = [];
+  state.guestAskedThisLive = {};
+  state.promoMonth = null;
+  state.promoCountThisMonth = 0;
   state.justLiveCancelled = null;
   state.justGuestReply = null;
   state.justDrNasakenaiEvent = false;
@@ -2698,6 +2737,7 @@ window.GameActions = {
   doPromotion, recordGuestCandidates, canGuestRecord, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
   AFTERPARTY_KING_TIMES, GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
   GUEST_INVITE_GALA, guestInviteGala, guestInviteVenue, COLLAB_INTIMACY_GAIN,
+  PROMO_MAX_PER_MONTH, promoLeftThisMonth,
   GUEST_INVITE_MIN_INTIMACY, canInviteGuest, isGuestCandidate, inviteGuestToLive, guestAcceptChance, cancelScheduledLive,
   learnSuperAbilityFrom, canLearnSuperFrom,
   resolveRyoheiRP3, scheduleRyoheiCollab, finalizeRecordingDay, resolveDrNasakenaiChoice, fleeAfterparty,
@@ -2716,7 +2756,7 @@ window.GameData = {
   MEMBER_COST_BASE, MEMBER_COST_MAX, memberHireCost, PRODUCER_COST, MONTHLY_PERFORMANCE_THRESHOLD,
   SONG_HEALTH_COST,
   PRACTICE_STAMPS_FOR_COUPON, PRACTICE_COUPON_VALID_TURNS,
-  PROMO_COOLDOWN_TURNS,
+  PROMO_MAX_PER_MONTH,
   getPracticeLevel, PRACTICE_LEVEL_MULTIPLIER, practicePreview, PRACTICE_LEVEL_UP_EVERY,
   TOTAL_TURNS, WEEKS_PER_MONTH, MONTHS_PER_YEAR, LIVE_INTERVAL_TURNS,
   turnToDate, turnToDateLabel,

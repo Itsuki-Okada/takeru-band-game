@@ -1527,13 +1527,6 @@ function practiceConfirmScreen(menu) {
     </div>`;
   }).join('');
 
-  const statChips = pv.stats.map(k => `
-    <div class="pr-stat-chip">
-      <span class="pr-stat-icon">${PRACTICE_STAT_ICON[k] || '●'}</span>
-      <span class="pr-stat-name">${STAT_LABEL[k] || k}</span>
-      <span class="pr-stat-val">+${pv.skillGain[0]}〜${pv.skillGain[1]}</span>
-    </div>`).join('');
-
   // レベルのゲージ(次のレベルまであと何回か)
   const lvPips = Array.from({ length: 5 }, (_, i) =>
     `<span class="pr-lv-pip ${i < pv.level ? 'pr-lv-pip-on' : ''}"></span>`).join('');
@@ -1565,9 +1558,6 @@ function practiceConfirmScreen(menu) {
 
     <p class="section-label">獲得予定の経験点</p>
     <div class="pr-exp-grid">${expChips}</div>
-
-    <p class="section-label">伸びるステータス</p>
-    <div class="pr-stat-grid">${statChips}</div>
 
     <div class="pr-cost-row">
       <div class="pr-cost-cell">
@@ -1953,7 +1943,7 @@ function screenRecording() {
      <div class="list">${songRows}</div>
      <p class="section-label">スタジオを選ぶ</p>
      <div class="list">${studioToggleRows()}</div>
-     <p class="section-label">サポートメンバーを雇う(任意・1人¥10,000)</p>
+     <p class="section-label">サポートメンバーを雇う(任意)</p>
      <div class="list">${memberToggleRows(recordingState.members, 'toggleRecordingMember')}</div>
      <p class="section-label">プロデューサーを起用する(任意)</p>
      <div class="list">${producerToggleRow()}</div>
@@ -2113,7 +2103,7 @@ function finishRecordingSession() {
 
 let liveFlowState = { confirming: false, promoting: false, members: [], venueKey: null };
 let promoLoadingState = null; // 'stream'|'flyer'|'ad'|null
-let afterpartyPartnerKey = null; // 打ち上げに同席しているNPCキー(りょーぺ等)。ソロならnull
+let afterpartyPartnerKeys = []; // 打ち上げに同席しているNPCキー(対バン相手)。ソロなら空
 
 function doPromotionUI(key) {
   liveFlowState.promoting = false;
@@ -2206,7 +2196,8 @@ function screenLive() {
   const reserved = window.GameData.calcTicketsReserved(venue);
   const weeksLeft = Math.max(0, s.nextLiveTurn - s.turn);
   const ready = s.turn >= s.nextLiveTurn;
-  const promoOnCooldown = s.livePromoUsedTurn !== null && (s.turn - s.livePromoUsedTurn) < window.GameData.PROMO_COOLDOWN_TURNS;
+  const promoLeft = GameActions.promoLeftThisMonth();
+  const promoOnCooldown = promoLeft <= 0;
 
   if (liveFlowState.promoting) {
     const promoButtons = window.GameData.PROMOTIONS.map(p => `
@@ -2225,8 +2216,16 @@ function screenLive() {
   }
 
   if (!liveFlowState.confirming) {
-    const takumaOffer = s.takumaEvents.collabPending ? s.takumaPendingOffer : null;
-    const takumaVenue = takumaOffer ? window.GameData.VENUES.find(v => v.key === takumaOffer.venueKey) : null;
+    // 誘われた対バン(たくま・りょーぺ)の予定。片方だけの表示になっていたので両方出す。
+    const collabCards = [];
+    if (s.ryoheiEvents && s.ryoheiEvents.firstCollabScheduled && s.ryoheiPendingOffer) {
+      collabCards.push({ name: 'りょーぺ', band: s.ryoheiPendingOffer.bandName || 'アフターワーク',
+        venueKey: s.ryoheiPendingOffer.venueKey, turn: s.ryoheiEvents.firstCollabTurn, gala: s.ryoheiPendingOffer.gala });
+    }
+    if (s.takumaEvents && s.takumaEvents.collabPending && s.takumaPendingOffer) {
+      collabCards.push({ name: 'たくま', band: s.takumaPendingOffer.bandName || 'KAME',
+        venueKey: s.takumaPendingOffer.venueKey, turn: s.takumaEvents.collabTurn, gala: s.takumaPendingOffer.gala });
+    }
     return `
       <div class="home-bg" style="background-image:url('${window.VENUE_BG[venue.key]}')">${bgHud()}</div>
       <div class="progress-card" style="margin:10px 14px;">
@@ -2234,18 +2233,23 @@ function screenLive() {
         <p class="progress-sub">会場: ${venue.name}(定員${venue.capacity.toLocaleString()}人)</p>
         <p class="progress-sub">予定日: ${turnToDateLabel(s.nextLiveTurn)}</p>
         <p class="progress-sub">チケット取り置き: ${reserved.toLocaleString()}人(来場確定)</p>
+        <p class="progress-sub">${(s.scheduledGuests || []).length
+          ? `対バン: ${s.scheduledGuests.map(g => `${g.name}(${g.bandName})`).join(' / ')}`
+          : '対バン: なし'}</p>
       </div>
-      ${takumaOffer ? `
+      ${collabCards.map(c => {
+        const cv = window.GameData.VENUES.find(v => v.key === c.venueKey);
+        return `
       <div class="progress-card" style="margin:10px 14px;">
-        <p class="progress-title">対バン予定: たくま(KAME)</p>
-        <p class="progress-sub">会場: ${takumaVenue.name}</p>
-        <p class="progress-sub">予定日: ${turnToDateLabel(s.takumaEvents.collabTurn)}</p>
-        <p class="progress-sub">ギャラ目安: ${yen(takumaOffer.gala)}</p>
-      </div>
-      ` : ''}
+        <p class="progress-title">対バン予定: ${c.name}(${c.band})</p>
+        <p class="progress-sub">会場: ${cv ? cv.name : '未定'}</p>
+        <p class="progress-sub">予定日: ${turnToDateLabel(c.turn)}</p>
+        <p class="progress-sub">ギャラ目安: ${yen(c.gala)}</p>
+      </div>`;
+      }).join('')}
       <div style="padding:0 14px;">
         <button class="genre-btn" style="width:100%;" ${promoOnCooldown ? 'disabled' : ''} onclick="liveFlowState.promoting=true;render();">
-          宣伝する${promoOnCooldown ? '(まだ実施できません)' : ''}
+          宣伝する${promoOnCooldown ? '(今月はもう実施できません)' : `(今月あと${promoLeft}回)`}
         </button>
       </div>
       ${ready ? `<div style="padding:10px 14px 0;"><button class="rest-btn" onclick="liveFlowState.venueKey=null;liveFlowState.confirming=true;render();">定期ライブの準備をする</button></div>` : ''}
@@ -2266,7 +2270,7 @@ function screenLive() {
       <button class="back" onclick="liveFlowState={confirming:false,promoting:false,members:[],venueKey:null};render();">←</button>
       <span>${confirmVenue.name}</span>
     </div>
-    <p class="section-label">サポートメンバーを選ぶ(任意・1人¥10,000)</p>
+    <p class="section-label">サポートメンバーを選ぶ(任意)</p>
     <div class="list">${memberToggleRows(liveFlowState.members, 'toggleLiveMember')}</div>
     <div style="padding:10px 14px 0;"><p class="row-sub" style="text-align:center;">${
       liveFlowState.venueKey
@@ -2354,37 +2358,73 @@ function startLiveSession() {
     showInsufficientFundsToast();
     return;
   }
+  // 自分から誘った対バン相手は先に演奏し、自分が一番最後に出る
+  const guests = isExtra ? [] : (window.GameState.scheduledGuests || []).filter(g => g.turn <= window.GameState.turn);
+  const stages = [...guests.map(g => ({ type: 'guest', guest: g })), { type: 'self' }];
   liveSessionState = {
     active: true,
     pendingParams: { members: liveFlowState.members.slice(), venueKey: isExtra ? venue.key : null },
     venueKey: venue.key,
+    stages, stageIndex: 0, frame: 0,
   };
   render();
   runLiveSession();
 }
 
+// たくま/りょーぺから誘われた対バンは定期ライブとは別日に入る。
+// ライブ画面からも予定が見えるようにしておく。
+function scheduledCollabNoticeHtml() {
+  const s = window.GameState;
+  const rows = [];
+  if (s.ryoheiEvents && s.ryoheiEvents.firstCollabScheduled && s.ryoheiPendingOffer) {
+    rows.push({ name: 'りょーぺ', band: s.ryoheiPendingOffer.bandName || 'アフターワーク', turn: s.ryoheiEvents.firstCollabTurn });
+  }
+  if (s.takumaEvents && s.takumaEvents.collabPending && s.takumaPendingOffer) {
+    rows.push({ name: 'たくま', band: s.takumaPendingOffer.bandName || 'KAME', turn: s.takumaEvents.collabTurn });
+  }
+  if (!rows.length) return '';
+  return `<div class="collab-notice">${rows.map(r =>
+    `<p class="collab-notice-row"><span class="collab-notice-date">${turnToDateLabel(r.turn)}</span>${r.band}の${r.name}との対バン</p>`
+  ).join('')}</div>`;
+}
+
+function currentLiveStage() {
+  const st = liveSessionState.stages;
+  if (!st || !st.length) return { type: 'self' };
+  return st[Math.min(liveSessionState.stageIndex || 0, st.length - 1)];
+}
+
 function screenLiveSession() {
   const venue = window.GameData.VENUES.find(v => v.key === liveSessionState.venueKey) || window.GameData.pickVenueForPlayer();
   const bg = window.VENUE_BG[venue.key];
-  const order = LIVE_MEMBER_ORDER.filter(k => liveFlowState.members.includes(k));
-  const performers = [...order, 'vocal'];
-  const soloVocal = performers.length === 1;
+  const stage = currentLiveStage();
+  const frame = liveSessionState.frame || 0;
 
-  const performerHtml = performers.map((partKey, i) => {
-    const frames = LIVE_CHAR_FRAMES[partKey];
-    const frame = liveSessionState.frame || 0;
-    const cls = soloVocal ? 'live-performer live-performer-solo' : 'live-performer';
-    return `<img id="livePerformer${i}" src="${getLivePerformerImg(partKey, frame)}" class="${cls}" data-part="${partKey}" />`;
-  }).join('');
+  let performerHtml;
+  let label;
+  if (stage.type === 'guest') {
+    performerHtml = `<img id="livePerformer0" src="${getOpponentPerformerImg(stage.guest.memberKey || stage.guest.id, frame)}" class="live-performer live-performer-solo" data-guest="1" />`;
+    label = `${stage.guest.name}（${stage.guest.bandName}）がライブ中...`;
+  } else {
+    const order = LIVE_MEMBER_ORDER.filter(k => liveFlowState.members.includes(k));
+    const performers = [...order, 'vocal'];
+    const soloVocal = performers.length === 1;
+    performerHtml = performers.map((partKey, i) => {
+      const cls = soloVocal ? 'live-performer live-performer-solo' : 'live-performer';
+      return `<img id="livePerformer${i}" src="${getLivePerformerImg(partKey, frame)}" class="${cls}" data-part="${partKey}" />`;
+    }).join('');
+    label = `${venue.name}でライブ中...`;
+  }
 
+  const duration = stage.type === 'guest' ? 3 : 5;
   return `
     <div class="header"><span>ライブ中</span></div>
     <div class="recording-session-bg" style="background-image:url('${bg}')">
       <div class="live-performers-row" style="bottom:${VENUE_STAGE_BOTTOM[venue.key] || '4%'};">${performerHtml}</div>
     </div>
     <div class="progress-card" style="margin:10px 14px;">
-      <p class="progress-title">${venue.name}でライブ中...</p>
-      <div class="bar"><div class="bar-fill loading-fill" style="animation-duration:5s;"></div></div>
+      <p class="progress-title">${label}</p>
+      <div class="bar"><div class="bar-fill loading-fill" style="animation-duration:${duration}s;"></div></div>
     </div>
   `;
 }
@@ -2393,9 +2433,15 @@ function runLiveSession() {
   clearInterval(liveFrameTimer);
   clearTimeout(livePhaseTimer);
   liveSessionState.frame = 0;
+  const stage = currentLiveStage();
 
   liveFrameTimer = setInterval(() => {
     liveSessionState.frame = liveSessionState.frame === 0 ? 1 : 0;
+    if (stage.type === 'guest') {
+      const img = document.getElementById('livePerformer0');
+      if (img) img.src = getOpponentPerformerImg(stage.guest.memberKey || stage.guest.id, liveSessionState.frame);
+      return;
+    }
     const order = LIVE_MEMBER_ORDER.filter(k => liveFlowState.members.includes(k));
     const performers = [...order, 'vocal'];
     performers.forEach((partKey, i) => {
@@ -2406,14 +2452,22 @@ function runLiveSession() {
 
   livePhaseTimer = setTimeout(() => {
     clearInterval(liveFrameTimer);
+    const stages = liveSessionState.stages || [];
+    if ((liveSessionState.stageIndex || 0) < stages.length - 1) {
+      // まだ出演者が残っている。次の出番へ(自分は一番最後)
+      liveSessionState.stageIndex = (liveSessionState.stageIndex || 0) + 1;
+      render();
+      runLiveSession();
+      return;
+    }
     playSfx('complete');
     finishLiveSession();
-  }, 5000);
+  }, stage.type === 'guest' ? 3000 : 5000);
 }
 
 function finishLiveSession() {
   const p = liveSessionState.pendingParams;
-  liveSessionState = { active: false, pendingParams: null };
+  liveSessionState = { active: false, pendingParams: null, stages: [], stageIndex: 0, frame: 0 };
   liveFlowState = { confirming: false, promoting: false, members: [], venueKey: null };
   playSfx('complete');
   const info = GameActions.doLive(p.members, p.venueKey ? { venueKey: p.venueKey } : {});
@@ -2962,11 +3016,14 @@ function screenFriend() {
     const isCandidate = GameActions.isGuestCandidate(f);
     const canInvite = GameActions.canInviteGuest(f.id);
     const inviteGala = GameActions.guestInviteGala();
-    const inviteReason = s.scheduledGuest
-      ? `${s.scheduledGuest.name}が出演予定`
+    const alreadyBooked = (s.scheduledGuests || []).some(g => g.id === f.id);
+    const alreadyAsked = !!(s.guestAskedThisLive || {})[f.id];
+    const inviteReason = alreadyBooked
+      ? '次のライブに出演予定'
+      : (alreadyAsked ? '次のライブでまた誘える'
       : (s.condition === 'fever' ? '熱が下がってから'
         : (iv < GameActions.GUEST_INVITE_MIN_INTIMACY ? `親密度${GameActions.GUEST_INVITE_MIN_INTIMACY}で誘える`
-          : (s.money < inviteGala ? `ギャラ${yen(inviteGala)}が足りない` : '')));
+          : (s.money < inviteGala ? `ギャラ${yen(inviteGala)}が足りない` : ''))));
     return `
       <div class="friend-card-wrap ${isCandidate ? '' : 'friend-card-solo'}">
         <button class="friend-card" onclick="friendDetailId='${f.id}';render();">
@@ -3047,7 +3104,8 @@ function screenFriend() {
     <div class="craft-block">
       <p class="craft-block-label">次の定期ライブ
         <span class="craft-block-hint">${window.GameData.turnToDateLabel(s.nextLiveTurn)}${
-          s.scheduledGuest ? ` / ${s.scheduledGuest.name}が出演` : ' / 対バン相手なし'}</span></p>
+          (s.scheduledGuests || []).length ? ` / ${s.scheduledGuests.map(g => g.name).join('・')}が出演` : ' / 対バン相手なし'}</span></p>
+        ${scheduledCollabNoticeHtml()}
     </div>
     <div class="craft-block">
       <p class="craft-block-label">バンドメンバー <span class="craft-block-hint">${bandMembers.length}人</span></p>
@@ -3192,7 +3250,7 @@ function screenHostOffer() {
   const venue = window.GameData.VENUES.find(v => v.key === hostOfferState.venue);
   const memberCost = hostOfferState.members.length * window.GameData.memberHireCost();
   return `<div class="header"><button class="back" onclick="hostOfferState.venue=null;render();">←</button><span>${venue.name}</span></div>
-    <p class="section-label">サポートメンバーを選ぶ(任意・1人¥10,000)</p>
+    <p class="section-label">サポートメンバーを選ぶ(任意)</p>
     <div class="list">${memberToggleRows(hostOfferState.members, 'toggleHostMember')}</div>
     <div style="padding:10px 14px 0;"><p class="row-sub" style="text-align:center;">費用: ¥${(venue.cost + memberCost).toLocaleString()}(会場費¥${venue.cost.toLocaleString()} + メンバー¥${memberCost.toLocaleString()})</p></div>
     <div style="padding:8px 14px 0;"><button class="rest-btn" onclick="confirmHostOffer()">この内容で対バンを開催する</button></div>`;
@@ -3687,8 +3745,14 @@ function showFriendOfferPopup(offer) {
   const otherPortrait = (window.MEMBER_CHARS && window.MEMBER_CHARS.ryohei && offer.friendId === 'ryohei')
     ? window.MEMBER_CHARS.ryohei.convo
     : (window.CONVO_CHARS && window.CONVO_CHARS.ryohei) || heroPortrait();
+  // りょーぺのオファーは受けると2週間後(定期ライブと被るなら3週間後)に決まる。
+  // scheduleRyoheiCollab と同じ式で日付を先に出し、台詞にそのまま入れる。
+  const sNow = window.GameState;
+  let ryoheiTurn = sNow.turn + 2;
+  if (ryoheiTurn === sNow.nextLiveTurn) ryoheiTurn += 1;
+  const ryoheiDate = turnToDateLabel(ryoheiTurn);
   const text = offer.isRyoheiRP2
-    ? `⚪︎月⚪︎週にイベントをするんだけど、よかったら出てもらえない？`
+    ? `${ryoheiDate}にイベントをするんだけど、よかったら出てもらえない？(ギャラ: ${yen(offer.gala)})`
     : `お疲れ様！ ${venue.name}でイベントを開催するんだけど、良かったら出演してもらえない？(ギャラ: ${yen(offer.gala)})`;
   // りょーぺのオファーは、たくま(TKM3)と同じく「定期ライブと被らない週に対バンを決める」形にする。
   // その場ですぐ会場へ向かうのは、オンラインのフレンドからのオファーだけ。
@@ -3721,7 +3785,7 @@ function screenFriendLive() {
   const venue = window.GameData.VENUES.find(v => v.key === offer.venueKey);
   const memberCost = friendOfferFlowState.members.length * window.GameData.memberHireCost();
   return `<div class="header"><span>${offer.friendName}との対バン(${venue.name})</span></div>
-    <p class="section-label">サポートメンバーを選ぶ(任意・1人¥10,000)</p>
+    <p class="section-label">サポートメンバーを選ぶ(任意)</p>
     <div class="list">${memberToggleRows(friendOfferFlowState.members, 'toggleFriendOfferMember')}</div>
     <div style="padding:10px 14px 0;"><p class="row-sub" style="text-align:center;">メンバー費用: ¥${memberCost.toLocaleString()}</p></div>
     <div style="padding:8px 14px 0;"><button class="rest-btn" onclick="startFriendLiveSession()">出演する</button></div>`;
@@ -3879,7 +3943,7 @@ function triggerRyoheiRP4ThenAfterparty() {
       'りょーぺ', segments, null, window.AFTERPARTY_BG, null,
       () => {
         playCompleteWipeTransition(() => {
-          afterpartyPartnerKey = 'ryohei';
+          afterpartyPartnerKeys = ['ryohei'];
           GameActions.startAfterparty();
           showDrinkPrompt(true);
         }, false);
@@ -5461,8 +5525,8 @@ function showLiveFinishedDialogue(info) {
     : [];
   const resultSegments = [
     { text: `${info.venueName}でのライブが終わった！`, type: 'neutral' },
-    ...(info.guestName ? [{ text: `${info.guestBand ? info.guestBand + 'の' : ''}${info.guestName}が対バンしてくれた！`, type: 'plus' }] : []),
-    ...(info.guestIntimacyGain > 0 ? [{ text: `${info.guestName}との親密度が${info.guestIntimacyGain}上がった`, type: 'plus' }] : []),
+    ...((info.guests || []).map(g => ({ text: `${g.bandName ? g.bandName + 'の' : ''}${g.name}が対バンしてくれた！`, type: 'plus' }))),
+    ...((info.guestIntimacy || []).map(g => ({ text: `${g.name}との親密度が${g.gained}上がった`, type: 'plus' }))),
     { text: `動員${info.audience.toLocaleString()}人 / 出来${info.performanceFinal}`, type: 'neutral' },
     { text: `知名度が${info.fameGain}増えた`, type: 'plus' },
     ...expLines,
@@ -5472,7 +5536,8 @@ function showLiveFinishedDialogue(info) {
   ];
   // 対バンの相手がいない普通のライブは、打ち上げが無い日もある(50%)。
   // その場合はまっすぐ帰るので、少しだけ体力が戻る。
-  const hasParty = !!info.guestName || Math.random() < 0.5;
+  const liveGuestKeys = (info.guests || []).map(g => g.memberKey || g.id);
+  const hasParty = liveGuestKeys.length > 0 || Math.random() < 0.5;
   if (!hasParty) {
     const s2 = window.GameState;
     const maxHealth = s2.maxHealthMult || 100;
@@ -5497,8 +5562,8 @@ function showLiveFinishedDialogue(info) {
     window.GameState.playerName || 'タケル',
     [...resultPages, page2],
     dialogueChoices([
-      { label: 'はい', action: 'respondAfterpartyUI(true)' },
-      { label: 'いいえ', action: 'respondAfterpartyUI(false)', cancel: true },
+      { label: 'はい', action: `respondAfterpartyUI(true,${JSON.stringify(liveGuestKeys)})` },
+      { label: 'いいえ', action: `respondAfterpartyUI(false,${JSON.stringify(liveGuestKeys)})`, cancel: true },
     ]),
     window.VENUE_OUTSIDE_BG,
     'live'
@@ -5513,7 +5578,8 @@ function respondAfterpartyUI(join, partnerKey) {
   const label = join ? false : (hasSpecialEvent ? false : dateWipeLabel(window.GameState.turn));
   playCompleteWipeTransition(() => {
     if (join) {
-      afterpartyPartnerKey = partnerKey || null; // 対バン相手がいればそのまま打ち上げにも同席する
+      // 対バン相手はそのまま打ち上げにも同席する(2組なら3人で飲む)
+      afterpartyPartnerKeys = partnerKey ? (Array.isArray(partnerKey) ? partnerKey.slice() : [partnerKey]) : [];
       GameActions.startAfterparty();
       showDrinkPrompt(true);
     } else {
@@ -5528,11 +5594,12 @@ function respondAfterpartyUI(join, partnerKey) {
 function afterpartyPortraits() {
   const s = window.GameState;
   const portraits = [{ src: window.DRINK_IMAGES.d1, name: s.playerName || 'タケル', active: true }];
-  const partner = afterpartyPartnerKey && window.MEMBER_CHARS && window.MEMBER_CHARS[afterpartyPartnerKey];
-  if (partner) {
-    const partnerName = (window.GameData.NPC_MEMBERS[afterpartyPartnerKey] || {}).name || '';
+  (afterpartyPartnerKeys || []).forEach(k => {
+    const partner = window.MEMBER_CHARS && window.MEMBER_CHARS[k];
+    if (!partner) return;
+    const partnerName = (window.GameData.NPC_MEMBERS[k] || {}).name || '';
     portraits.push({ src: partner.convo, name: partnerName, active: false });
-  }
+  });
   return portraits;
 }
 
@@ -5601,7 +5668,7 @@ function handleDrinkFlee() {
     window.AFTERPARTY_BG,
     'live',
     () => {
-      afterpartyPartnerKey = null;
+      afterpartyPartnerKeys = [];
       GameActions.endAfterpartyAndGoHome();
       const s = window.GameState;
       const hasSpecialEvent = hasPendingSpecialEvent();
@@ -5630,15 +5697,17 @@ function finishAfterpartyFlow() {
       : { text: `メンバーとの親密度が${Math.abs(result.tier.intimacy)}下がった`, type: 'minus' });
   }
   // 対バン相手が打ち上げに同席していた場合、その相手との親密度も結果に応じて変動する(メンバーの場合と同じ扱い)
-  if (afterpartyPartnerKey) {
-    const partnerFriend = window.GameState.friends.find(f => f.id === afterpartyPartnerKey);
-    if (partnerFriend && partnerFriend.intimacy !== undefined) {
-      partnerFriend.intimacy += result.tier.intimacy;
-      segments.push(result.tier.intimacy >= 0
-        ? { text: `${partnerFriend.name}との親密度が${result.tier.intimacy}上がった`, type: 'plus' }
-        : { text: `${partnerFriend.name}との親密度が${Math.abs(result.tier.intimacy)}下がった`, type: 'minus' });
-    }
-  }
+  (afterpartyPartnerKeys || []).forEach(k => {
+    const partnerFriend = window.GameState.friends.find(f => f.id === k);
+    if (!partnerFriend || partnerFriend.intimacy === undefined) return;
+    const before = partnerFriend.intimacy;
+    partnerFriend.intimacy = Math.max(0, Math.min(100, before + result.tier.intimacy));
+    const delta = partnerFriend.intimacy - before;
+    if (delta === 0) return;
+    segments.push(delta > 0
+      ? { text: `${partnerFriend.name}との親密度が${delta}上がった`, type: 'plus' }
+      : { text: `${partnerFriend.name}との親密度が${Math.abs(delta)}下がった`, type: 'minus' });
+  });
   const gsAfter = window.GameState;
   if (gsAfter.afterpartyKnackGained) {
     const k = gsAfter.afterpartyKnackGained;
@@ -5661,7 +5730,7 @@ function finishAfterpartyFlow() {
     window.AFTERPARTY_BG,
     'live',
     () => {
-      afterpartyPartnerKey = null;
+      afterpartyPartnerKeys = [];
       GameActions.endAfterpartyAndGoHome();
       const s = window.GameState;
       const hasSpecialEvent = hasPendingSpecialEvent();
