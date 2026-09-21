@@ -1114,19 +1114,23 @@ function finalizeFriendOfferLive(offer, memberKeys) {
 
 function resolveRyoheiRP3(returned) {
   const friend = state.friends.find(f => f.id === 'ryohei');
+  const before = friend ? (friend.intimacy || 0) : 0;
+  let appliedExp;
   if (returned) {
     state.money -= 2000;
-    grantExp({ str: 10, ski: 10, int: 10 });
+    appliedExp = grantExp({ str: 10, ski: 10, int: 10 });
     if (friend) addIntimacy(friend, 10);
     addLog('りょーぺに2,000円返した', 'minus');
-    addLog('りょーぺとの親密度が10上がった', 'plus');
   } else {
-    grantExp({ men: 30 });
-    if (friend) friend.intimacy = (friend.intimacy || 0) - 5;
+    appliedExp = grantExp({ men: 30 });
+    if (friend) friend.intimacy = Math.max(0, before - 5);
     addLog('りょーぺへの借金を踏み倒した…', 'minus');
-    addLog('りょーぺとの親密度が5下がった', 'minus');
   }
+  const delta = friend ? (friend.intimacy || 0) - before : 0;
+  if (delta > 0) addLog(`りょーぺとの親密度が${delta}上がった`, 'plus');
+  else if (delta < 0) addLog(`りょーぺとの親密度が${Math.abs(delta)}下がった`, 'minus');
   render();
+  return { returned, appliedExp, intimacyDelta: delta, cost: returned ? 2000 : 0 };
 }
 
 // ===== たくま(KAME)イベント =====

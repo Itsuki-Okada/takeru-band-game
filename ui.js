@@ -5797,6 +5797,30 @@ function finishAfterpartyFlow() {
   );
 }
 
+// RP3(2000円を返すか)の返事。りょーぺの反応と、親密度の増減を成果として出す。
+function resolveRyoheiRP3Ui(returned) {
+  const info = GameActions.resolveRyoheiRP3(returned);
+  const ryoheiImg = (window.MEMBER_CHARS && window.MEMBER_CHARS.ryohei) ? window.MEMBER_CHARS.ryohei.convo : heroPortrait();
+  const line = returned
+    ? 'りょーぺ「まさか本当に返してもらえると思わなかった、、」'
+    : 'りょーぺ「お前！なんでだよ！返すまで言い続けるからな！」';
+  const segments = [{ text: line, type: 'neutral' }];
+  if (info.cost) segments.push({ text: `${yen(info.cost)}を返した`, type: 'minus' });
+  Object.entries(info.appliedExp || {}).forEach(([cat, v]) => {
+    if (v > 0) segments.push({ text: `${StatsEngine.EXP_CATEGORY_NAMES[cat]}経験点を${v}得た`, type: 'plus' });
+  });
+  if (info.intimacyDelta > 0) segments.push({ text: `りょーぺとの親密度が${info.intimacyDelta}上がった`, type: 'plus' });
+  else if (info.intimacyDelta < 0) segments.push({ text: `りょーぺとの親密度が${Math.abs(info.intimacyDelta)}下がった`, type: 'minus' });
+
+  showResultDialogue(
+    [
+      { src: idlePortrait(), name: window.GameState.playerName || 'タケル', active: false },
+      { src: ryoheiImg, name: 'りょーぺ', active: true },
+    ],
+    'りょーぺ', segments, null, window.VENUE_OUTSIDE_BG, null, closeToHomeAnimated
+  );
+}
+
 function showRyoheiCollabDayPopup() {
   playCompleteWipeTransition(() => {
     showDialogueScene(
@@ -5980,8 +6004,8 @@ function showRyoheiEventPopup(key) {
         'りょーぺ',
         'おい！タケル！いい加減2000円返せ！',
         dialogueChoices([
-          { label: '返す', action: 'GameActions.resolveRyoheiRP3(true);closeDialogue();' },
-          { label: '断る', action: 'GameActions.resolveRyoheiRP3(false);closeDialogue();', cancel: true },
+          { label: '返す', action: 'resolveRyoheiRP3Ui(true)' },
+          { label: '断る', action: 'resolveRyoheiRP3Ui(false)', cancel: true },
         ]),
         window.VENUE_OUTSIDE_BG,
         null,
