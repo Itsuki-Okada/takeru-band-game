@@ -2183,6 +2183,8 @@ let livePhaseTimer = null;
 
 const LIVE_MEMBER_ORDER = ['bass', 'keyboard', 'drums'];
 // 各会場の背景画像内で「ステージの上」に来るよう、演者の下端位置を個別調整
+// 絵を箱の下端に合わせる会場(背景の床が低いところ)
+const VENUE_STAGE_FLOOR = { budokan: true };
 const VENUE_STAGE_BOTTOM = {
   street: '4%',
   small: '9%',
@@ -2461,7 +2463,7 @@ function screenLiveSession() {
   return `
     <div class="header"><span>ライブ中</span></div>
     <div class="recording-session-bg" style="background-image:url('${bg}')">
-      <div class="live-performers-row" style="bottom:${VENUE_STAGE_BOTTOM[venue.key] || '4%'};">${performerHtml}</div>
+      <div class="live-performers-row ${VENUE_STAGE_FLOOR[venue.key] ? 'live-performers-row-floor' : ''}" style="bottom:${VENUE_STAGE_BOTTOM[venue.key] || '4%'};">${performerHtml}</div>
     </div>
     <div class="progress-card" style="margin:10px 14px;">
       <p class="progress-title">${label}</p>
@@ -3917,7 +3919,7 @@ function screenFriendLiveSession() {
   return `
     <div class="header"><span>対バンライブ中</span></div>
     <div class="recording-session-bg" style="background-image:url('${bg}')">
-      <div class="live-performers-row" style="bottom:${VENUE_STAGE_BOTTOM[venue.key] || '4%'};">${performerHtml}</div>
+      <div class="live-performers-row ${VENUE_STAGE_FLOOR[venue.key] ? 'live-performers-row-floor' : ''}" style="bottom:${VENUE_STAGE_BOTTOM[venue.key] || '4%'};">${performerHtml}</div>
     </div>
     <div class="progress-card" style="margin:10px 14px;">
       <p class="progress-title">${label}</p>

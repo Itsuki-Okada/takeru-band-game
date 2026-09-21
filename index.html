@@ -682,6 +682,10 @@
     filter: drop-shadow(0 6px 10px rgba(0,0,0,0.4));
   }
   .live-performer-solo { max-width: 42%; }
+  /* object-fit:contain だと絵が箱の中央に置かれ、下に大きな余白ができる。
+     武道館のように床が低い背景では、その余白のぶん絵が浮いて見えるので、
+     この指定をした会場だけ絵を箱の下端に合わせる。 */
+  .live-performers-row-floor .live-performer { object-position: bottom; }
   .hero-name {
     text-align: center;
     font-size: 16px;
@@ -3262,20 +3266,20 @@
       measurementId: "G-3FCH2Y6VSE",
     };
   </script>
-  <script>window.APP_VERSION = "133";</script>
-  <script src="firebase-service.js?v=133"></script>
-  <script src="icons.js?v=133"></script>
-  <script src="stats-engine.js?v=133"></script>
+  <script>window.APP_VERSION = "134";</script>
+  <script src="firebase-service.js?v=134"></script>
+  <script src="icons.js?v=134"></script>
+  <script src="stats-engine.js?v=134"></script>
   <!-- 効果音(WebAudioで合成。音声ファイルは持たない) -->
-  <script src="sfx.js?v=133"></script>
-  <script src="game.js?v=133"></script>
-  <script src="ui.js?v=133"></script>
+  <script src="sfx.js?v=134"></script>
+  <script src="game.js?v=134"></script>
+  <script src="ui.js?v=134"></script>
   <!-- エンディングだけを確認するためのプレビュー(index.html?ending=1)。
        パラメータが無ければ何もしない。不要になればこの1行とending-preview.jsを消すだけでよい。 -->
-  <script src="keiba.js?v=133"></script>
-  <script src="ending-preview.js?v=133"></script>
+  <script src="keiba.js?v=134"></script>
+  <script src="ending-preview.js?v=134"></script>
   <!-- 選択肢のあるイベントだけを確認するためのプレビュー(index.html?event=1)。
        パラメータが無ければ何もしない。不要になればこの1行とevent-preview.jsを消すだけでよい。 -->
-  <script src="event-preview.js?v=133"></script>
+  <script src="event-preview.js?v=134"></script>
 </body>
 </html>
