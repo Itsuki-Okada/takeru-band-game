@@ -1811,10 +1811,10 @@ let INDIE_OVERALL_REQUIRED = 50;   // Dランク相当
 // 数字だけ伸ばしても、演奏が伴っていなければ声はかからない。
 // 条件を満たしても、すぐ声がかかるわけではない。満たしている間だけ毎回抽選する。
 // 1年半で約20%、2年で約40%が到達するように、実際に2年ぶんを回して決めた数値。
-let MAJOR_AUDIENCE_REQUIRED = 700;      // 1本のライブで呼べた最高動員
-let MAJOR_FAME_REQUIRED = 18000;
-let MAJOR_FOLLOWERS_REQUIRED = 12500;
-let MAJOR_OVERALL_REQUIRED = 74;        // Bランク相当
+let MAJOR_AUDIENCE_REQUIRED = 0;        // 廃止(1本のライブで呼べた最高動員)
+let MAJOR_FAME_REQUIRED = 15000;
+let MAJOR_FOLLOWERS_REQUIRED = 10000;
+let MAJOR_OVERALL_REQUIRED = 68;        // Cランク上位相当
 let MAJOR_OFFER_CHANCE = 0.40;        // 条件を満たせば数週以内に必ず声がかかる(=抽選ではなく条件で決まる)
 
 // メジャーの給料。知名度・フォロワー・ライブの動員から20万〜50万の間で決まる。
@@ -1889,8 +1889,9 @@ function meetsIndieRequirements() {
 // 累計値は最後まで伸び続けるのでどこに線を引いても終盤通過になるが、
 // 動員は実力に応じた水準で頭打ちになるため、早い段階でも到達できる。
 function meetsMajorRequirements() {
-  return (state.bestAudience || 0) >= MAJOR_AUDIENCE_REQUIRED
-    && state.fame >= MAJOR_FAME_REQUIRED
+  // 「1本のライブで◯人」の条件は、小さい箱でもすぐ超えてしまい
+  // ゲートとして働いていなかったため廃止した(知名度・フォロワー・総合力の3条件)
+  return state.fame >= MAJOR_FAME_REQUIRED
     && state.followers >= MAJOR_FOLLOWERS_REQUIRED
     && StatsEngine.calcOverallScore(state) >= MAJOR_OVERALL_REQUIRED;
 }
