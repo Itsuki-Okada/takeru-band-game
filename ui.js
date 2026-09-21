@@ -5537,6 +5537,8 @@ function showLiveFinishedDialogue(info) {
   // 対バンの相手がいない普通のライブは、打ち上げが無い日もある(50%)。
   // その場合はまっすぐ帰るので、少しだけ体力が戻る。
   const liveGuestKeys = (info.guests || []).map(g => g.memberKey || g.id);
+  // onclick属性に埋めるため、二重引用符を含まない配列リテラルにする
+  const guestKeysLiteral = `[${liveGuestKeys.map(k => `'${k}'`).join(',')}]`;
   const hasParty = liveGuestKeys.length > 0 || Math.random() < 0.5;
   if (!hasParty) {
     const s2 = window.GameState;
@@ -5562,8 +5564,8 @@ function showLiveFinishedDialogue(info) {
     window.GameState.playerName || 'タケル',
     [...resultPages, page2],
     dialogueChoices([
-      { label: 'はい', action: `respondAfterpartyUI(true,${JSON.stringify(liveGuestKeys)})` },
-      { label: 'いいえ', action: `respondAfterpartyUI(false,${JSON.stringify(liveGuestKeys)})`, cancel: true },
+      { label: 'はい', action: `respondAfterpartyUI(true,${guestKeysLiteral})` },
+      { label: 'いいえ', action: `respondAfterpartyUI(false,${guestKeysLiteral})`, cancel: true },
     ]),
     window.VENUE_OUTSIDE_BG,
     'live'

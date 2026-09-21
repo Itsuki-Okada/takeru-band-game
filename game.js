@@ -349,7 +349,7 @@ const PROMOTIONS = [
 // 宣伝は1ヶ月(4週)に1回まで
 const PROMO_MAX_PER_MONTH = 1;
 // 月1回しか打てないぶん、1回の効き目を大きくする
-let PROMO_POWER = 1.6;
+let PROMO_POWER = 1;
 let SONG_STAT_WEIGHT = 0.72;   // 曲の完成度がステータスに対してどれだけ伸びるか
 function currentMonthIndex() { return Math.floor(state.turn / 4); }
 function promoLeftThisMonth() {
@@ -1013,8 +1013,11 @@ function finalizeFriendOfferLive(offer, memberKeys) {
   state.money -= memberCost;
 
   // インフレ防止: 自分のステータスを重視した集客計算(自分75% : フレンド25%)
-  const fameScore = state.fame * 0.75 + offer.friendFame * 0.25;
-  const followerScore = state.followers * 0.75 + offer.friendFollowers * 0.25;
+  const npcRef = NPC_MEMBERS[offer.friendId] || {};
+  const friendFame = Number(offer.friendFame) || npcRef.fame || 0;
+  const friendFollowers = Number(offer.friendFollowers) || npcRef.followers || 0;
+  const fameScore = (state.fame || 0) * 0.75 + friendFame * 0.25;
+  const followerScore = (state.followers || 0) * 0.75 + friendFollowers * 0.25;
   const fillRate = Math.min(1, 0.25 + fameScore / 60000 + followerScore / 120000);
   const promoAudience = state.liveExtraAudience || 0;
   const audience = Math.min(venue.capacity, Math.round((venue.capacity * fillRate + promoAudience) * liveAudienceMult()));
@@ -1760,8 +1763,8 @@ let INDIE_OVERALL_REQUIRED = 50;   // Dランク相当
 // 条件を満たしても、すぐ声がかかるわけではない。満たしている間だけ毎回抽選する。
 // 1年半で約20%、2年で約40%が到達するように、実際に2年ぶんを回して決めた数値。
 let MAJOR_AUDIENCE_REQUIRED = 700;      // 1本のライブで呼べた最高動員
-let MAJOR_FAME_REQUIRED = 22000;
-let MAJOR_FOLLOWERS_REQUIRED = 15000;
+let MAJOR_FAME_REQUIRED = 18000;
+let MAJOR_FOLLOWERS_REQUIRED = 12500;
 let MAJOR_OVERALL_REQUIRED = 74;        // Bランク相当
 let MAJOR_OFFER_CHANCE = 0.40;        // 条件を満たせば数週以内に必ず声がかかる(=抽選ではなく条件で決まる)
 
