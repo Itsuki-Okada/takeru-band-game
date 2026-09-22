@@ -760,7 +760,13 @@ function checkTakumaMeeting() {
 // 10杯飲み切るのをこの回数こなすと「打ち上げ王」のコツが手に入る
 const AFTERPARTY_KING_TIMES = 5;
 // 打ち上げ王の1杯あたりの失敗率。10杯通しで約90%成功になる値。
+// 打ち上げ王はメンタルの影響を受けず、常にこの確率(=どんな状態でも安定して飲める)。
 const AFTERPARTY_KING_VOMIT = 1 - Math.pow(0.9, 1 / 10);
+// メンタルが高いほど吐きにくい。メンタル20で10杯完飲が約30%、100で約70%になる傾き。
+function afterpartyMentalMult() {
+  const mental = (state.stats && state.stats.mental) || 0;
+  return Math.max(0.45, Math.min(1.9, 1.89 - (mental / 100) * 1.388));
+}
 const RP3_NAG_INTERVAL = 4;   // 借金を踏み倒した後、また催促してくるまでの週数
 
 // ===== フレンドから受け継ぐコツ =====
@@ -2431,11 +2437,12 @@ function drinkAtAfterparty() {
   // 吐く確率: 2%からスタートし、飲むほど上昇(8杯目あたりで約10%)
   // 打ち上げ◯を持っていると吐きにくい。打ち上げ王なら一切吐かない。
   const apTier = abilityTier('afterparty');
-  // 打ち上げ王: 一切吐かない → 「10杯飲み切れる確率が約90%」に下方修正。
-  // 1杯ごとの確率を一定(約1.05%)にすると、10杯通しで 0.9 になる。
+  // 打ち上げ王は常に約90%で10杯飲み切れる(メンタルに左右されない)。
+  // それ以外は、メンタルが低いほど吐きやすい。
   const vomitChance = apTier >= 3
     ? AFTERPARTY_KING_VOMIT
-    : Math.min(0.35, (0.02 + Math.max(0, ap.drinks - 1) * 0.011) * (apTier >= 1 ? 0.4 : 1));
+    : Math.min(0.5, (0.02 + Math.max(0, ap.drinks - 1) * 0.011)
+        * (apTier >= 1 ? 0.4 : 1) * afterpartyMentalMult());
   const vomited = Math.random() < vomitChance;
   if (vomited) ap.vomited = true;
   return { vomited, done: vomited || ap.drinks >= 10, drinks: ap.drinks };
@@ -2846,7 +2853,7 @@ window.GameActions = {
   resolveParentCall, resolveCdOnAir, resolveLabelRequest,
   spendExtraWeek,
   doPromotion, recordGuestCandidates, canGuestRecord, startAfterparty, drinkAtAfterparty, finishAfterparty, endAfterpartyAndGoHome,
-  AFTERPARTY_KING_TIMES, GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
+  AFTERPARTY_KING_TIMES, afterpartyMentalMult, GUEST_INVITE_MIN_INTIMACY, canInviteGuest, inviteGuestToLive, guestAcceptChance,
   GUEST_INVITE_GALA, guestInviteGala, guestInviteVenue, COLLAB_INTIMACY_GAIN,
   FRIEND_KNACK, FRIEND_KNACK_CHANCE,
   PROMO_MAX_PER_MONTH, promoLeftThisMonth, promoMaxPerMonth,
