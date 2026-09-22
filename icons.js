@@ -131,6 +131,9 @@ window.MEMBER_CHARS = {
 };
 window.CONVO_CHARS = { ryohei: window.MEMBER_CHARS.ryohei.convo };
 
+// キャラ名鑑で使うタケルの会話絵。未用意ならホーム画面の待機絵が使われる。
+window.TAKERU_CONVO = 'img/takeru_convo.png';
+
 // ===== ナサケナーイ博士イベント =====
 window.DR_NASAKENAI_IMG = 'img/dr_nasakenai.png';
 window.LAB_BG = 'img/lab_bg.jpg';

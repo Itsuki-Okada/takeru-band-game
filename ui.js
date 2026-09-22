@@ -857,23 +857,24 @@ const CHARA_LOG_ENTRIES = [
   { key: 'takeru', name: 'タケル', npc: null, part: 'ギター/ボーカル', band: '(プレイヤー)',
     catch: '28歳。崖っぷちのバンドマン。',
     profile: 'バンドが活動休止になり、気づけば28歳。<br>「30歳までに売れなかったら就職」という母との約束を抱えて、残り2年半で新しいバンドを立ち上げた。<br><br>能力は毎回ランダムで、サクセスごとに違う人生を送ることになる。',
-    getImg: () => (window.HOME_CHAR_STATES && window.HOME_CHAR_STATES.normal) || '' },
+    getImg: () => window.TAKERU_CONVO || (window.HOME_CHAR_STATES && window.HOME_CHAR_STATES.normal) || '',
+    fallbackImg: () => (window.HOME_CHAR_STATES && window.HOME_CHAR_STATES.normal) || '' },
   { key: 'kisara', name: 'きさら', npc: 'kisara', part: 'ベース', band: 'バンドメンバー',
     catch: '演奏A',
     profile: 'なんだかんだ主人公のわがままを聞いてくれる頼れる存在<br>競馬が好きらしい。',
-    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.kisara) ? window.MEMBER_CHARS.kisara.idle : '' },
+    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.kisara) ? window.MEMBER_CHARS.kisara.convo : '' },
   { key: 'itsuki', name: 'いつき', npc: 'itsuki', part: 'ドラム', band: 'バンドメンバー',
     catch: 'メンタルB',
     profile: '口数が少なく根暗だがたまにうるさいときがある。',
-    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.itsuki) ? window.MEMBER_CHARS.itsuki.idle : '' },
+    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.itsuki) ? window.MEMBER_CHARS.itsuki.convo : '' },
   { key: 'ryohei', name: 'りょーぺ', npc: 'ryohei', part: 'ギター/ボーカル', band: 'アフターワーク',
     catch: 'メンタルB',
     profile: 'バンド「アフターワーク」のギターボーカル。<br>コミュ力の塊。多分。',
-    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.ryohei) ? window.MEMBER_CHARS.ryohei.idle : '' },
+    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.ryohei) ? window.MEMBER_CHARS.ryohei.convo : '' },
   { key: 'takuma', name: 'たくま', npc: 'takuma', part: 'ギター/ボーカル', band: 'KAME',
     catch: '歌唱A',
     profile: 'バンド「KAME」のギターボーカル。<br>年々黒目が大きくなっている。<br>彼の目に光が宿るときはくるのか。<br>亀を飼っている(かめきち)',
-    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.takuma) ? window.MEMBER_CHARS.takuma.idle : '' },
+    getImg: () => (window.MEMBER_CHARS && window.MEMBER_CHARS.takuma) ? window.MEMBER_CHARS.takuma.convo : '' },
   { key: 'hori', name: '堀 良音', npc: null, part: 'レーベル担当', band: 'ロケットミュージックエンターテイメント',
     catch: 'スカウト',
     profile: 'ロケットミュージックエンターテイメントのスカウト<br>インディーズレーベルも数社運営している。',
@@ -888,7 +889,8 @@ let charaProfileKey = null;
 function screenCharaLogFull() {
   const tiles = CHARA_LOG_ENTRIES.map(c => `
     <div class="chara-log-tile" onclick="charaProfileKey='${c.key}';render();">
-      <img src="${c.getImg()}" class="chara-log-thumb" loading="lazy" decoding="async" />
+      <img src="${c.getImg()}" class="chara-log-thumb" loading="lazy" decoding="async"
+        onerror="this.onerror=null;this.src='${c.fallbackImg ? c.fallbackImg() : ''}';" />
       <p class="chara-log-name">${c.name}</p>
     </div>`).join('');
   return `
