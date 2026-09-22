@@ -4566,7 +4566,7 @@ function iconPresets() {
     { key: 'kisara',        label: 'きさら',     url: M.kisara && M.kisara.idle },
     { key: 'itsuki',        label: 'いつき',     url: M.itsuki && M.itsuki.idle },
     { key: 'ryohei',        label: 'りょーぺ',   url: M.ryohei && M.ryohei.idle },
-    { key: 'takuma',        label: 'たくま',     url: M.takuma && M.takuma.idle },
+    { key: 'takuma',        label: 'たくま',     url: M.takuma && M.takuma.live && M.takuma.live[0] },
   ].filter(p => !!p.url);
 }
 
@@ -4593,8 +4593,28 @@ function setProfileIcon(url) {
     if (url) localStorage.setItem(PROFILE_ICON_KEY, url);
     else localStorage.removeItem(PROFILE_ICON_KEY);
   } catch (e) { /* 保存できない環境は今回のプレイ中だけ有効 */ }
-  syncFirebaseProfile();   // ランキングに出るアイコンも更新する
+  syncFirebaseProfile();   // オンラインのプロフィールを更新
+  applyIconToMyRecords(url || defaultIconUrl());   // ランキングと手元の記録にも反映
   render();
+}
+
+// アイコンを変えたら、過去のサクセス記録(ランキングに出るもの)にも反映する。
+// 記録には保存時のアイコンが焼き付いているので、まとめて差し替える。
+function applyIconToMyRecords(iconUrl) {
+  try {
+    const key = 'takeru_completed_runs';
+    const runs = JSON.parse(localStorage.getItem(key) || '[]');
+    if (runs.length) {
+      runs.forEach(r => { r.iconUrl = iconUrl; });
+      localStorage.setItem(key, JSON.stringify(runs));
+    }
+  } catch (e) { /* 保存できない環境は無視 */ }
+  if (window.FirebaseSvc && window.FirebaseSvc.isReady() && window.FirebaseSvc.updateMyRunsIcon) {
+    window.FirebaseSvc.updateMyRunsIcon(iconUrl).then(() => {
+      rankingData = null;      // 次に開いた時に取り直す
+      majorBandsData = null;
+    });
+  }
 }
 
 // アイコン選択ダイアログ

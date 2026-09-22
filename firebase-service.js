@@ -187,6 +187,21 @@
   }
 
   // アカウント名を変えた時、過去の完走記録の名前もまとめて直す
+  // 過去のサクセス記録のアイコンをまとめて差し替える(ランキングの表示に反映される)
+  async function updateMyRunsIcon(iconUrl) {
+    if (!ready) return 0;
+    try {
+      const snap = await db.collection('completedRuns').where('uid', '==', currentUser.uid).get();
+      const batch = db.batch();
+      snap.docs.forEach(d => batch.update(d.ref, { iconUrl: iconUrl || '' }));
+      await batch.commit();
+      return snap.size;
+    } catch (err) {
+      console.warn('[FirebaseSvc] 記録のアイコン変更に失敗', err);
+      return 0;
+    }
+  }
+
   async function renameMyRuns(newName) {
     if (!ready) return 0;
     try {
@@ -416,6 +431,7 @@
     fetchCompletedRuns,
     fetchMajorBands,
     renameMyRuns,
+    updateMyRunsIcon,
     searchPlayerById,
     sendFriendRequest,
     fetchPendingRequests,
