@@ -240,17 +240,10 @@ const STUDIOS = [
   { key: 'c', name: 'Cスタジオ', costPerSong: 100000, qualityBonus: 1.35 },
 ];
 
-// 曲数に応じた上限価格。曲数が少ないのに高値は付けられない。
-//   シングル: 1曲500 / 2曲1,000 / 3曲以上1,500
-//   EP:      3曲1,500 / 4曲1,750 / 5曲以上2,000
-//   アルバム:  従来どおり上限3,500
-function maxPriceForSongs(typeKey, songCount) {
+// 売値の上限は種別ごとに決まる(曲数では変わらない)
+function maxPriceForSongs(typeKey) {
   const type = cdTypeOf(typeKey);
-  if (!type) return 0;
-  const n = Math.max(1, songCount || 1);
-  if (typeKey === 'single') return Math.min(type.priceMax, 500 * n);
-  if (typeKey === 'ep') return n >= 5 ? 2000 : (n >= 4 ? 1750 : 1500);
-  return type.priceMax;
+  return type ? type.priceMax : 0;
 }
 
 const CD_TYPES = [
@@ -1890,11 +1883,13 @@ function recordingCostMult() {
   if (state.indieLabel !== 'truster') return 1;
   return state.labelPerkBoost ? 0.65 : 0.75;   // 要求に応えていると割引が増える
 }
+// CDの売れ行き全体にかかる倍率。初動・継続販売の両方に効く。
+let CD_SALES_SCALE = 1;
 function cdSalesMult() {
   // 商才◯/青田買い: CDが売れやすくなる
   const merchant = 1 + abilityTier('merchant') * 0.12;
   const label = state.indieLabel !== 'orion' ? 1 : (state.labelPerkBoost ? 1.25 : 1.15);
-  return label * merchant;
+  return label * merchant * CD_SALES_SCALE;
 }
 function liveAudienceMult() {
   if (state.indieLabel !== 'elevenback') return 1;
@@ -2127,9 +2122,9 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
     render();
     return;
   }
-  const maxPrice = maxPriceForSongs(typeKey, songIds.length);
+  const maxPrice = maxPriceForSongs(typeKey);
   if (price < type.priceMin || price > maxPrice) {
-    addLog(`売値が価格帯の範囲外です(${songIds.length}曲の上限は${yen(maxPrice)})`, 'neutral');
+    addLog('売値が価格帯の範囲外です', 'neutral');
     render();
     return;
   }
