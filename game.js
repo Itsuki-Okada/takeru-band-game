@@ -2408,10 +2408,12 @@ function doLive(memberKeys, opts) {
 
 // ===== 打ち上げ =====
 // 打ち上げの成果。体力は杯数に関わらず一律で減る。
+// 打ち上げの成果。経験点は精神のみに入る。体力は杯数に関わらず一律で減る。
+// 打ち上げ王を持っていると経験点が1.5倍(10杯45 / 5〜9杯30)。
 const AFTERPARTY_TIERS = [
   { max: 4,  expMin: 5,  expMax: 5,  intimacy: -5, health: -10 },  // 4杯以下: 付き合いが悪い
-  { max: 9,  expMin: 10, expMax: 10, intimacy: 10, health: -10 },  // 5〜9杯
-  { max: 10, expMin: 20, expMax: 20, intimacy: 10, health: -10 },  // 10杯飲み切り
+  { max: 9,  expMin: 20, expMax: 20, intimacy: 10, health: -10 },  // 5〜9杯
+  { max: 10, expMin: 30, expMax: 30, intimacy: 10, health: -10 },  // 10杯飲み切り
 ];
 function getAfterpartyTier(drinks) {
   return AFTERPARTY_TIERS.find(t => drinks <= t.max) || AFTERPARTY_TIERS[AFTERPARTY_TIERS.length - 1];
@@ -2454,7 +2456,7 @@ function finishAfterparty() {
   // 打ち上げ王は飲んだぶんがしっかり身になる
   const kingMult = abilityTier('afterparty') >= 3 ? 1.5 : 1;
   const eMin = Math.round(tier.expMin * kingMult), eMax = Math.round(tier.expMax * kingMult);
-  const expRange = { str: [eMin, eMax], ski: [eMin, eMax], int: [eMin, eMax], men: [eMin, eMax] };
+  const expRange = { men: [eMin, eMax] };   // 飲みの席で鍛えられるのは精神だけ
   const applied = grantExp(rollExpFromRanges(expRange));
 
   if (state.lastLiveHadMembers) {
