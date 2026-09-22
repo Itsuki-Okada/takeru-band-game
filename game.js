@@ -1884,7 +1884,7 @@ function recordingCostMult() {
   return state.labelPerkBoost ? 0.65 : 0.75;   // 要求に応えていると割引が増える
 }
 // CDの売れ行き全体にかかる倍率。初動・継続販売の両方に効く。
-let CD_SALES_SCALE = 1;
+let CD_SALES_SCALE = 0.7;
 function cdSalesMult() {
   // 商才◯/青田買い: CDが売れやすくなる
   const merchant = 1 + abilityTier('merchant') * 0.12;
