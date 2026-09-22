@@ -240,6 +240,19 @@ const STUDIOS = [
   { key: 'c', name: 'Cスタジオ', costPerSong: 100000, qualityBonus: 1.35 },
 ];
 
+// 曲数に応じた上限価格。曲数が少ないのに高値は付けられない。
+//   シングル: 1曲500 / 2曲1,000 / 3曲以上1,500
+//   EP:      3曲1,500 / 4曲1,750 / 5曲以上2,000
+//   アルバム:  従来どおり上限3,500
+function maxPriceForSongs(typeKey, songCount) {
+  const type = cdTypeOf(typeKey);
+  if (!type) return 0;
+  const n = Math.max(1, songCount || 1);
+  if (typeKey === 'single') return Math.min(type.priceMax, 500 * n);
+  if (typeKey === 'ep') return n >= 5 ? 2000 : (n >= 4 ? 1750 : 1500);
+  return type.priceMax;
+}
+
 const CD_TYPES = [
   { key: 'single', name: 'シングル', minSongs: 1, maxSongs: 4, priceMin: 500, priceMax: 1500 },
   { key: 'ep', name: 'EP', minSongs: 3, maxSongs: 7, priceMin: 1000, priceMax: 2000 },
@@ -2114,8 +2127,9 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
     render();
     return;
   }
-  if (price < type.priceMin || price > type.priceMax) {
-    addLog('売値が価格帯の範囲外です', 'neutral');
+  const maxPrice = maxPriceForSongs(typeKey, songIds.length);
+  if (price < type.priceMin || price > maxPrice) {
+    addLog(`売値が価格帯の範囲外です(${songIds.length}曲の上限は${yen(maxPrice)})`, 'neutral');
     render();
     return;
   }
@@ -2866,7 +2880,7 @@ window.GameActions = {
 };
 window.GameData = {
   JOBS, jobMasteryMult, JOB_MASTERY_WAGE_BONUS, JOB_MASTERY_EXP_BONUS, PRACTICE_MENUS, GENRES, CD_TYPES, STUDIOS, VENUES, GOODS, MEMBERS, PROMOTIONS, NPC_MEMBERS,
-  INDIE_LABELS, INDIE_OFFER_THRESHOLD, indieLabelDef, recordingCostMult,
+  INDIE_LABELS, INDIE_OFFER_THRESHOLD, indieLabelDef, recordingCostMult, maxPriceForSongs,
   RECORD_GUEST_COST, RECORD_GUEST_MIN_INTIMACY, RECORD_GUEST_IDS,
   INDIE_OVERALL_REQUIRED, meetsIndieRequirements,
   MAJOR_AUDIENCE_REQUIRED, MAJOR_FAME_REQUIRED, MAJOR_FOLLOWERS_REQUIRED, MAJOR_OVERALL_REQUIRED, meetsMajorRequirements,

@@ -1963,7 +1963,9 @@ function screenRecording() {
   const cost = selected.length * studio.costPerSong + memberCost + producerCost + guestCost;
   const guestRows = guestToggleRows();
   const canProduce = selected.length >= type.minSongs && selected.length <= type.maxSongs;
-  const price = recordingState.price || type.priceMin;
+  // 曲数によって上限が変わるので、選び直すたびに収まる値へ寄せる
+  const maxPrice = window.GameData.maxPriceForSongs(type.key, selected.length);
+  const price = Math.min(maxPrice, Math.max(type.priceMin, recordingState.price || type.priceMin));
 
   return sectionTitle(`${type.name}を制作(${type.minSongs}〜${type.maxSongs}曲)`) +
     `<p class="section-label">曲を選ぶ(${selected.length}/${type.maxSongs})</p>
@@ -1983,8 +1985,8 @@ function screenRecording() {
        </div>
      </div>
      <div style="padding:10px 14px 0;">
-       <p class="section-label" style="padding:0 0 4px;">売値: <span id="priceLabel">¥${price.toLocaleString()}</span>(¥${type.priceMin.toLocaleString()}〜¥${type.priceMax.toLocaleString()})</p>
-       <input id="priceRange" type="range" min="${type.priceMin}" max="${type.priceMax}" step="50" value="${price}"
+       <p class="section-label" style="padding:0 0 4px;">売値: <span id="priceLabel">¥${price.toLocaleString()}</span>(¥${type.priceMin.toLocaleString()}〜¥${maxPrice.toLocaleString()} / ${selected.length}曲)</p>
+       <input id="priceRange" type="range" min="${type.priceMin}" max="${maxPrice}" step="50" value="${price}"
          oninput="recordingState.price=parseInt(this.value);document.getElementById('priceLabel').innerText='¥'+parseInt(this.value).toLocaleString();"
          style="width:100%;" />
      </div>
@@ -2065,7 +2067,9 @@ function toggleRecordingGuest(id) {
 function confirmProduceCD() {
   const titleField = document.getElementById('cdTitleField');
   const title = titleField ? titleField.value : '';
-  const price = recordingState.price || window.GameData.CD_TYPES.find(t => t.key === recordingState.type).priceMin;
+  const cdType = window.GameData.CD_TYPES.find(t => t.key === recordingState.type);
+  const priceCap = window.GameData.maxPriceForSongs(recordingState.type, recordingState.selectedSongs.length);
+  const price = Math.min(priceCap, Math.max(cdType.priceMin, recordingState.price || cdType.priceMin));
 
   const s = window.GameState;
   const studio = window.GameData.STUDIOS.find(st => st.key === recordingState.studio) || window.GameData.STUDIOS[0];
