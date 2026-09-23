@@ -33,6 +33,8 @@ const state = {
   declinedIndieOffer: false,
   indieOfferPausedUntil: 0,   // インディーズのオファーを見送った後、次に声がかかるまで
   declinedMajorOffer: false,
+  producerMet: false,        // プロデューサーと出会ったか
+  justProducerMeeting: false,
   majorOfferPausedUntil: 0,   // メジャーのオファーを見送った後、次に声がかかるまで
   justAgencyOffer: null,
   justIndieLabelOffer: false,
@@ -122,7 +124,18 @@ function memberHireCost() {
   const raw = (MEMBER_COST_BASE + fameAdd + followerAdd) * labelMult;
   return Math.min(MEMBER_COST_MAX, Math.round(raw / 1000) * 1000);
 }
-const PRODUCER_COST = 30000;
+const PRODUCER_COST = 50000;
+// プロデューサーはインディーズ所属後に出会う。出会うまでレコーディングでは雇えない。
+function producerMet() { return !!state.producerMet; }
+function checkProducerMeeting() {
+  if (state.producerMet) return;
+  if (state.agencyStatus === 'unsigned') return;   // インディーズデビュー後
+  if (hasPendingEvent()) return;
+  if (state.justAgencyOffer || state.justIndieLabelOffer) return;
+  state.producerMet = true;
+  state.justProducerMeeting = true;
+  addLog('プロデューサーと出会った', 'plus');
+}
 // レコーディングのゲスト参加(たくま・りょーぺ)。親密度がMAXになると頼めるようになる。
 // ライブのサポートメンバーにはできない(あくまでスタジオでの客演)。
 const RECORD_GUEST_COST = 60000;
@@ -1714,6 +1727,7 @@ function advanceWeek(opts) {
   checkLabelRequest();
   checkAgencyOffers();
   checkTakumaMeeting();
+  checkProducerMeeting();
   if (!skipEvents) {
     checkRandomEvent();   // 30%でイベントが1つ発生する(中身はEVENT_POOLから抽選)
   }
@@ -2140,6 +2154,7 @@ function produceCD(typeKey, songIds, price, customTitle, memberKeys, studioKey, 
     return;
   }
   const memberCost = memberKeys.length * memberHireCost();
+  producerHired = producerHired && producerMet();
   const producerCost = producerHired ? PRODUCER_COST : 0;
   const guestCost = guestIds.length * RECORD_GUEST_COST;
   const recordingBaseCost = songs.length * studio.costPerSong;
@@ -2687,6 +2702,8 @@ function resetGameState() {
   state.indieOfferPausedUntil = 0;
   state.declinedMajorOffer = false;
   state.majorOfferPausedUntil = 0;
+  state.producerMet = false;
+  state.justProducerMeeting = false;
   state.justAgencyOffer = null;
   state.justIndieLabelOffer = false;
   state.justKeibaEvent = null;
@@ -2886,7 +2903,7 @@ window.GameData = {
   MAJOR_AUDIENCE_REQUIRED, MAJOR_FAME_REQUIRED, MAJOR_FOLLOWERS_REQUIRED, MAJOR_OVERALL_REQUIRED, meetsMajorRequirements,
   MAJOR_SALARY_MIN, MAJOR_SALARY_MAX, calcMajorSalary,
   KEIBA_BET_LIMIT, KEIBA_PAYOUT_LIMIT, KEIBA_RACE_NAMES,
-  MEMBER_COST_BASE, MEMBER_COST_MAX, memberHireCost, PRODUCER_COST, MONTHLY_PERFORMANCE_THRESHOLD,
+  MEMBER_COST_BASE, MEMBER_COST_MAX, memberHireCost, PRODUCER_COST, producerMet, MONTHLY_PERFORMANCE_THRESHOLD,
   SONG_HEALTH_COST,
   PRACTICE_STAMPS_FOR_COUPON, PRACTICE_COUPON_VALID_TURNS,
   PROMO_MAX_PER_MONTH,

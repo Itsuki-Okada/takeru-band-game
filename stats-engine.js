@@ -222,7 +222,7 @@ const StatsEngine = (function () {
     afterparty: {
       knackKey: 'afterparty',
       name: '打ち上げ',
-      effect: '打ち上げで吐きにくくなる。「打ち上げ王」はメンタルに関係なく約90%で10杯飲み切れ、経験点も1.5倍になる',
+      effect: '打ち上げで吐きにくくなる。「打ち上げ王」まで上げると飲み切りやすくなり、経験点も増える',
       unlockType: 'exp',
       // 金ランクの「打ち上げ王」は、10杯飲み切るのを5回達成してコツを掴まないと習得できない
       tiers: [
@@ -504,8 +504,6 @@ const StatsEngine = (function () {
     const key = superAbilityFor(friend.id);
     if (!key) return { ok: false, reason: 'none' };
     if (hasAbilityKey(state, key)) return { ok: false, reason: 'owned', key };
-    const other = ownedSuperKey(state);
-    if (other) return { ok: false, reason: 'already_have_other', key, otherLabel: ABILITIES[other].tiers[0].label };
     const cost = superAbilityCost(state, key);
     if ((friend.intimacy || 0) < FRIENDSHIP_ABILITY_REQUIRED) {
       return { ok: false, reason: 'intimacy', key, cost };

@@ -1864,6 +1864,8 @@ function memberToggleRows(selectedArray, toggleFnName) {
 }
 
 function producerToggleRow() {
+  // まだ出会っていないプロデューサーは雇えない
+  if (!window.GameData.producerMet()) return '';
   const checked = recordingState.producer;
   return `<div class="row ${checked ? 'active' : ''}" onclick="recordingState.producer=!recordingState.producer;render();">
     ${thumbImg(window.RECORDING_CHARS.producer)}
@@ -1973,8 +1975,8 @@ function screenRecording() {
      <div class="list">${studioToggleRows()}</div>
      <p class="section-label">サポートメンバーを雇う(任意)</p>
      <div class="list">${memberToggleRows(recordingState.members, 'toggleRecordingMember')}</div>
-     <p class="section-label">プロデューサーを起用する(任意)</p>
-     <div class="list">${producerToggleRow()}</div>
+     ${window.GameData.producerMet() ? `<p class="section-label">プロデューサーを起用する(任意)</p>
+     <div class="list">${producerToggleRow()}</div>` : ''}
      ${guestRows ? `<p class="section-label">ゲストを呼ぶ(親密度MAXのフレンドのみ)</p><div class="list">${guestRows}</div>` : ''}
      <div style="padding:10px 14px 0;">
        <p class="section-label" style="padding:0 0 4px;">CDタイトル(空欄でランダム)</p>
@@ -1995,7 +1997,9 @@ function screenRecording() {
      ${logBox()}`;
 }
 
-const RECORDING_PART_HEIGHT = { drums: 175, bass: 140, keyboard: 148, guitar: 148, vocal: 148 };
+// 収録中のキャラの大きさ。パートやゲストで変わらないよう1つの値に固定する。
+const RECORDING_CHAR_HEIGHT = 150;
+const RECORDING_PART_HEIGHT = { drums: RECORDING_CHAR_HEIGHT, bass: RECORDING_CHAR_HEIGHT, keyboard: RECORDING_CHAR_HEIGHT, guitar: RECORDING_CHAR_HEIGHT, vocal: RECORDING_CHAR_HEIGHT };
 
 // 'guest:takuma' のようなフェーズキーから相手のIDを取り出す
 function recordingGuestOf(phaseKey) {
@@ -2018,10 +2022,10 @@ function screenRecordingSession() {
   const guestId = recordingGuestOf(phaseKey);
   const config = RECORDING_PHASE_CONFIG[phaseKey] || { label: `${guestId ? recordingGuestName(guestId) : ''}がレコーディング中...` };
   const bg = window.STUDIO_BG[recordingState.studio];
-  const charHeight = RECORDING_PART_HEIGHT[phaseKey] || 140;
+  const charHeight = RECORDING_CHAR_HEIGHT;
   // プロデューサーも主人公たちと同じ大きさで立たせる
   const producerHtml = recordingState.producer
-    ? `<img src="${window.RECORDING_CHARS.producer}" class="recording-producer-img" style="height:${guestId ? 150 : charHeight}px;" />`
+    ? `<img src="${window.RECORDING_CHARS.producer}" class="recording-producer-img" style="height:${charHeight}px;" />`
     : '';
 
   return `
@@ -2029,7 +2033,7 @@ function screenRecordingSession() {
     <div class="recording-session-bg" style="background-image:url('${bg}')">
       ${bgHud()}
       ${producerHtml}
-      <img id="recordingCharImg" src="${guestId ? recordingGuestImg(guestId, rs.frame) : recordingPhaseImg(phaseKey, rs.frame)}" class="recording-char-img" style="height:${guestId ? 150 : charHeight}px;" />
+      <img id="recordingCharImg" src="${guestId ? recordingGuestImg(guestId, rs.frame) : recordingPhaseImg(phaseKey, rs.frame)}" class="recording-char-img" style="height:${charHeight}px;" />
     </div>
     <div class="progress-card" style="margin:10px 14px;">
       <p class="progress-title">${config.label}</p>
@@ -3196,8 +3200,6 @@ function superAbilityPanel(friend) {
   } else if (st.reason === 'intimacy') {
     footer = `<div class="super-bar"><div class="super-bar-fill" style="width:${Math.min(100, iv / need * 100)}%;"></div></div>
       <p class="super-note">親密度 ${iv} / ${need} — もっと仲良くなると習得できる</p>`;
-  } else if (st.reason === 'already_have_other') {
-    footer = `<p class="super-note super-note-short">すでに「${st.otherLabel}」を習得しています(絆の特殊能力は1つだけ)</p>`;
   } else if (st.ok) {
     footer = `<button class="super-learn-btn" onclick="learnSuperAbilityUI('${friend.id}')">「${label}」を習得する</button>`;
   } else {
@@ -3720,7 +3722,7 @@ function idlePortrait() {
 // (「日付が変わった→イベントが始まった」と二段階に見えるのを避けるため)。
 function hasPendingSpecialEvent() {
   const s = window.GameState;
-  return !!(s.justCompletedSong || s.justDrNasakenaiEvent || s.justTakumaEvent || s.justIndieLabelOffer || s.justKeibaEvent || s.justChoiceEvent);
+  return !!(s.justCompletedSong || s.justDrNasakenaiEvent || s.justTakumaEvent || s.justProducerMeeting || s.justIndieLabelOffer || s.justKeibaEvent || s.justChoiceEvent);
 }
 
 function closeToHomeAnimated() {
@@ -4412,7 +4414,25 @@ function abilityRows(s) {
     const currentLabel = owned ? def.tiers[tierIdx].label : '未習得';
     const isGold = !!(owned && owned.tier === 'gold');
     let actionHtml;
-    if (def.unlockType === 'special') {
+    if (def.unlockType === 'friendship') {
+      // 絆の特殊能力。ステータス画面からそのまま習得できる(相手ごとに1つずつ取れる)
+      const friend = (s.friends || []).find(f => f.id === def.friendId);
+      const st = friend ? StatsEngine.superAbilityStatus(s, friend) : { ok: false, reason: 'none' };
+      const need = StatsEngine.FRIENDSHIP_ABILITY_REQUIRED;
+      if (owned) {
+        actionHtml = '<p class="rank-stat-sub">習得済み</p>';
+      } else if (!friend) {
+        actionHtml = `<p class="rank-stat-sub">まだ出会っていません</p>`;
+      } else if (st.reason === 'intimacy') {
+        actionHtml = `<p class="rank-stat-sub">${friend.name}との親密度 ${friend.intimacy || 0} / ${need}</p>`;
+      } else {
+        const cost = st.cost || {};
+        const costLabel = Object.entries(cost).map(([c, v]) => `${StatsEngine.EXP_CATEGORY_NAMES[c]}${v}`).join(' ');
+        const info = StatsEngine.abilityNextCost(s, key);
+        const off = info && info.off > 0 ? ` <span class="knack-off">コツLv.${info.knackLevel} -${info.off}%</span>` : '';
+        actionHtml = `<button class="rank-up-btn" ${st.ok ? '' : 'disabled'} onclick="learnSuperAbilityUI('${def.friendId}')">${def.tiers[0].label}を習得</button><p class="rank-stat-sub">必要: ${costLabel}${off}</p>`;
+      }
+    } else if (def.unlockType === 'special') {
       actionHtml = `<p class="rank-stat-sub">${def.negative ? 'イベントの結果でついてしまった能力です' : '持って生まれた才能です'}</p>`;
     } else if (nextTier) {
       let can = false;
@@ -5155,6 +5175,11 @@ function showStartOfDayPopupsIfAny() {
     showTakumaEventPopup(key);
     return;
   }
+  if (s.justProducerMeeting) {
+    s.justProducerMeeting = false;
+    showProducerMeetingPopup();
+    return;
+  }
   if (s.justIndieLabelOffer) {
     s.justIndieLabelOffer = false;
     // ナサケナーイ博士と同じく、呼び出し元の暗転にそのまま乗る(ここで暗転を重ねない)
@@ -5854,6 +5879,41 @@ function resolveRyoheiRP3Ui(returned) {
       { src: ryoheiImg, name: 'りょーぺ', active: true },
     ],
     'りょーぺ', segments, null, window.VENUE_OUTSIDE_BG, null, closeToHomeAnimated
+  );
+}
+
+// プロデューサーとの出会い(インディーズ所属後)。ライブハウスの外で声をかけられる。
+function showProducerMeetingPopup() {
+  setEventBgm(true);
+  const producerImg = window.RECORDING_CHARS.producer;
+  playCompleteWipeTransition(() => {
+    showDialogueScene(
+      [
+        { src: idlePortrait(), name: window.GameState.playerName || 'タケル', active: true },
+        { src: producerImg, name: 'プロデューサー', active: true },
+      ],
+      'プロデューサー',
+      'やあ、初めまして。君たちの音源を聴いてね、私とならもっと良い作品が作れると思うんだ。気になったらいつでも声かけてね。',
+      null,
+      window.VENUE_OUTSIDE_BG,
+      null,
+      () => showProducerMetResult(closeToHomeAnimated)
+    );
+  }, false);
+}
+
+function showProducerMetResult(onClose) {
+  showResultDialogue(
+    [
+      { src: idlePortrait(), name: window.GameState.playerName || 'タケル', active: false },
+      { src: window.RECORDING_CHARS.producer, name: 'プロデューサー', active: true },
+    ],
+    'プロデューサー',
+    [
+      { text: 'プロデューサーと出会った', type: 'plus' },
+      { text: `レコーディングで起用できるようになった(¥${window.GameData.PRODUCER_COST.toLocaleString()})`, type: 'neutral' },
+    ],
+    null, window.VENUE_OUTSIDE_BG, null, onClose
   );
 }
 
