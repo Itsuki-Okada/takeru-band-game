@@ -1024,6 +1024,8 @@ function pickRandomFriend() {
   // 混ざると「りょーぺの絵でたくまから誘われ、その週がいきなりライブになる」ことになっていた。
   let pool = state.friends.filter(f => isGuestCandidate(f) && f.id !== 'takuma');
   if (state.ryoheiJustBecameFriend) pool = pool.filter(f => f.id !== 'ryohei');
+  // すでに対バンの予定が入っている相手は、重ねて誘ってこない(たくまのTKM3と同じ扱い)
+  if (state.ryoheiEvents.firstCollabScheduled) pool = pool.filter(f => f.id !== 'ryohei');
   if (pool.length === 0) return null;
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -1887,7 +1889,7 @@ function recordingCostMult() {
   return state.labelPerkBoost ? 0.65 : 0.75;   // 要求に応えていると割引が増える
 }
 // CDの売れ行き全体にかかる倍率。初動・継続販売の両方に効く。
-let CD_SALES_SCALE = 0.7;
+let CD_SALES_SCALE = 0.85;
 function cdSalesMult() {
   // 商才◯/青田買い: CDが売れやすくなる
   const merchant = 1 + abilityTier('merchant') * 0.12;
