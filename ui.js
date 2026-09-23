@@ -5723,7 +5723,7 @@ function showDrinkPrompt(isFirst) {
   const drinks = (s.afterpartyState && s.afterpartyState.drinks) || 0;
   const introHtml = isFirst
     ? `<p class="dialogue-line">打ち上げが開始1時間...</p><p class="dialogue-line">飲みゲームが始まった！</p>`
-    : `<p class="dialogue-line">${drinks}杯目…どうする？</p>`;
+    : `<p class="dialogue-line">${drinks + 1}杯目…どうする？</p>`;
   const buttonsHtml = isFirst
     ? dialogueChoices([
         { label: '参加する', action: 'handleDrinkChoice(true)' },
