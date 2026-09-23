@@ -5905,7 +5905,7 @@ function showProducerMeetingPopup() {
 function showProducerMetResult(onClose) {
   showResultDialogue(
     [
-      { src: idlePortrait(), name: window.GameState.playerName || 'タケル', active: false },
+      { src: idlePortrait(), name: window.GameState.playerName || 'タケル', active: true },
       { src: window.RECORDING_CHARS.producer, name: 'プロデューサー', active: true },
     ],
     'プロデューサー',
