@@ -1019,7 +1019,10 @@ function checkRandomEvent() {
 function pickRandomFriend() {
   // 今週フレンドになったばかりの相手は、同じ週のうちに対バンオファーが来ないよう除外する
   // 対バンは相手のバンドと組むもの。自分のバンドのメンバーは相手にならない。
-  let pool = state.friends.filter(f => isGuestCandidate(f));
+  //
+  // たくまは専用のイベント(TKM3)で日程を決めて誘ってくるので、こちらの汎用オファーからは外す。
+  // 混ざると「りょーぺの絵でたくまから誘われ、その週がいきなりライブになる」ことになっていた。
+  let pool = state.friends.filter(f => isGuestCandidate(f) && f.id !== 'takuma');
   if (state.ryoheiJustBecameFriend) pool = pool.filter(f => f.id !== 'ryohei');
   if (pool.length === 0) return null;
   return pool[Math.floor(Math.random() * pool.length)];

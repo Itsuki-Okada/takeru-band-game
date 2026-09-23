@@ -3790,9 +3790,9 @@ function showFriendOfferPopup(offer) {
   setEventBgm(true);   // イベント中はイベントBGMに切り替える
   const offerJson = JSON.stringify(offer).replace(/"/g, '&quot;');
   const venue = window.GameData.VENUES.find(v => v.key === offer.venueKey);
-  const otherPortrait = (window.MEMBER_CHARS && window.MEMBER_CHARS.ryohei && offer.friendId === 'ryohei')
-    ? window.MEMBER_CHARS.ryohei.convo
-    : (window.CONVO_CHARS && window.CONVO_CHARS.ryohei) || heroPortrait();
+  // 誘ってきた相手の絵を出す(以前は分岐の両方がりょーぺの絵になっていた)
+  const offerChars = window.MEMBER_CHARS && window.MEMBER_CHARS[offer.friendId];
+  const otherPortrait = (offerChars && offerChars.convo) || heroPortrait();
   // りょーぺのオファーは受けると2週間後(定期ライブと被るなら3週間後)に決まる。
   // scheduleRyoheiCollab と同じ式で日付を先に出し、台詞にそのまま入れる。
   const sNow = window.GameState;
