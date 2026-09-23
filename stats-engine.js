@@ -219,6 +219,18 @@ const StatsEngine = (function () {
         { tier: 'gold',   label: '青田買い', cost: { int: 260 } },
       ],
     },
+    twinblade: {
+      name: '二刀流',
+      effect: '作曲が1週で終わるようになる',
+      unlockType: 'genre', genresNeeded: 2,
+      tiers: [{ tier: 'gold', label: '二刀流', cost: { int: 180, ski: 120 } }],
+    },
+    onlyone: {
+      name: '唯一無二',
+      effect: 'CDの売上が1.5倍、リリースの知名度が1.3倍になる。どのジャンルで作っても熟練度が最大扱いになる',
+      unlockType: 'genre', genresNeeded: 3, super: true,
+      tiers: [{ tier: 'gold', label: '唯一無二', cost: { int: 200, ski: 160, men: 120 } }],
+    },
     afterparty: {
       knackKey: 'afterparty',
       name: '打ち上げ',
@@ -408,6 +420,12 @@ const StatsEngine = (function () {
     return { cost, knackLevel: lv, knackKey: def.knackKey || null, off: Math.round((1 - knackDiscount(lv)) * 100), tier: nextTier.tier, label: nextTier.label };
   }
 
+  // 熟練度が最大(100)になっているジャンルの数
+  function maxedGenreCount(state) {
+    const gm = state.genreMastery || {};
+    return Object.keys(gm).filter(g => (gm[g] || 0) >= 100).length;
+  }
+
   function tryUnlockAbility(state, abilityKey) {
     const def = ABILITIES[abilityKey];
     if (!def) return { ok: false, reason: 'unknown_ability' };
@@ -423,6 +441,9 @@ const StatsEngine = (function () {
     if (def.unlockType === 'friendship') {
       // 超特殊能力はフレンドとの親密度でしか手に入らない
       return { ok: false, reason: 'friendship_only' };
+    }
+    if (def.unlockType === 'genre' && maxedGenreCount(state) < def.genresNeeded) {
+      return { ok: false, reason: 'genre_not_enough', need: def.genresNeeded, have: maxedGenreCount(state) };
     }
     if (def.unlockType === 'mastery') {
       const mastery = (state.jobMastery && state.jobMastery[def.masteryJob]) || 0;
@@ -585,7 +606,7 @@ const StatsEngine = (function () {
     createEmptyExpPool, createEmptyStats, createEmptyInvested,
     getRank, getRankIndex, pointCost, setCostCurve,
     gainExp, getExpMultiplier, applyMultiplier,
-    KNACK_MAX_LEVEL, knackLevel, knackDiscount, bestKnackLevel, abilityNextCost,
+    KNACK_MAX_LEVEL, knackLevel, knackDiscount, bestKnackLevel, abilityNextCost, maxedGenreCount,
     ABILITY_ASSESS, ABILITY_ASSESS_CAP, setAbilityAssess, abilityAssessValue,
     raiseStat, calcOverallScore, getOverallRank,
     tryUnlockAbility, hasSense, grantRandomNegative, rollStartingAbility,

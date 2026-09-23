@@ -1810,7 +1810,7 @@ function genreMasteryTier(mastery) {
 function predictSongCompletion(genre) {
   const st = state.stats || {};
   const mastery = (state.genreMastery && genre) ? (state.genreMastery[genre] || 0) : 0;
-  const masteryBonus = (mastery / 100) * 18;
+  const masteryBonus = (hasAbility('onlyone') ? 1 : mastery / 100) * 18;
   const base = ((st.compose || 0) * 1.5 + (st.vocal || 0) + (st.play || 0)) / 3 * SONG_STAT_WEIGHT + masteryBonus;
   const earBonus = 1 + abilityTier('onkan') * 0.05 + abilityTier('rhythm') * 0.03;
   const mid = hasAbility('focus') ? 5 : 5;   // trendBonusの期待値
@@ -1822,7 +1822,7 @@ function finalizeSongProduction() {
   const sick = isSickForExp();
   state.genreMastery = state.genreMastery || {};
   const mastery = state.genreMastery[draft.genre] || 0;
-  const masteryBonus = (mastery / 100) * 18; // 熟練度MAXで+18点相当
+  const masteryBonus = (hasAbility('onlyone') ? 1 : mastery / 100) * 18; // 熟練度MAXで+18点相当
   const st = state.stats || {};
   // skillsの成長を廃止したので、実際に育つ5ステータスから完成度を出す
   const base = ((st.compose || 0) * 1.5 + (st.vocal || 0) + (st.play || 0)) / 3 * SONG_STAT_WEIGHT + masteryBonus;
@@ -1908,7 +1908,8 @@ function cdSalesMult() {
   // 商才◯/青田買い: CDが売れやすくなる
   const merchant = 1 + abilityTier('merchant') * 0.12;
   const label = state.indieLabel !== 'orion' ? 1 : (state.labelPerkBoost ? 1.25 : 1.15);
-  return label * merchant * CD_SALES_SCALE;
+  const onlyone = hasAbility('onlyone') ? 1.5 : 1;
+  return label * merchant * onlyone * CD_SALES_SCALE;
 }
 function liveAudienceMult() {
   if (state.indieLabel !== 'elevenback') return 1;
@@ -2116,7 +2117,8 @@ function doPracticeSession(key, useCoupon) {
 function startSong(genre, customTitle) {
   if (isFeverBlocked()) return;
   const cost = 2000;
-  const totalWeeks = 2;
+  // 二刀流: 作曲が1週で終わる
+  const totalWeeks = hasAbility('twinblade') ? 1 : 2;
   if (state.songInProgress) { addLog('すでに制作中の曲があります', 'neutral'); render(); return; }
   if (state.money < cost) { notifyInsufficientFunds(); render(); return; }
   state.money -= cost;
@@ -2244,7 +2246,7 @@ function releaseCD(releaseId) {
   const songCountFactor = Math.sqrt(r.songCount);
   const units = Math.max(3, Math.round((3 + fameBase) * qualityFactor * followerMultiplier * songCountFactor * pf * cdSalesMult()));
   const sales = units * r.price;
-  const fameGain = Math.round(r.completionAvg * r.songCount * 0.8 * FAME_GROWTH);
+  const fameGain = Math.round(r.completionAvg * r.songCount * 0.8 * FAME_GROWTH * (hasAbility('onlyone') ? 1.3 : 1));
 
   addMoney(sales);
   state.fame += fameGain;

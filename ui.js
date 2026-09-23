@@ -4414,7 +4414,21 @@ function abilityRows(s) {
     const currentLabel = owned ? def.tiers[tierIdx].label : '未習得';
     const isGold = !!(owned && owned.tier === 'gold');
     let actionHtml;
-    if (def.unlockType === 'friendship') {
+    if (def.unlockType === 'genre') {
+      // ジャンル熟練度をMAXにした数で開く能力
+      const have = StatsEngine.maxedGenreCount(s);
+      const info = StatsEngine.abilityNextCost(s, key);
+      const cost = (info && info.cost) || (nextTier && nextTier.cost) || {};
+      const costLabel = Object.entries(cost).map(([c, v]) => `${StatsEngine.EXP_CATEGORY_NAMES[c]}${v}`).join(' ');
+      if (owned) {
+        actionHtml = '<p class="rank-stat-sub">習得済み</p>';
+      } else if (have < def.genresNeeded) {
+        actionHtml = `<p class="rank-stat-sub">熟練度が金のジャンル ${have} / ${def.genresNeeded}</p>`;
+      } else {
+        const can = Object.keys(cost).every(c => (s.expPool[c] || 0) >= cost[c]);
+        actionHtml = `<button class="rank-up-btn" ${can ? '' : 'disabled'} onclick="unlockAbilityUI('${key}')">${nextTier.label}を習得</button><p class="rank-stat-sub">必要: ${costLabel}</p>`;
+      }
+    } else if (def.unlockType === 'friendship') {
       // 絆の特殊能力。ステータス画面からそのまま習得できる(相手ごとに1つずつ取れる)
       const friend = (s.friends || []).find(f => f.id === def.friendId);
       const st = friend ? StatsEngine.superAbilityStatus(s, friend) : { ok: false, reason: 'none' };
